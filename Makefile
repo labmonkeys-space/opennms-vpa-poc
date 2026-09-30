@@ -98,3 +98,18 @@ lab-addons:
 .PHONY: phase0-mechanism
 phase0-mechanism:
 	lab/phase0/resize-check.sh
+
+KUBECONFIG_LAB := $(LAB_STATE)/kubeconfig
+
+.PHONY: deploy
+deploy: deps
+	KUBECONFIG=$(KUBECONFIG_LAB) helm upgrade --install poc $(CHART) --namespace poc --create-namespace --force-conflicts --wait --timeout 40m
+
+.PHONY: undeploy
+undeploy:
+	KUBECONFIG=$(KUBECONFIG_LAB) helm uninstall poc --namespace poc --wait || true
+	KUBECONFIG=$(KUBECONFIG_LAB) kubectl delete namespace poc --wait
+
+.PHONY: phase0-stack
+phase0-stack:
+	lab/phase0/stack-check.sh

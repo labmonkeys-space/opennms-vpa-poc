@@ -18,8 +18,8 @@ core:
   # Admin password bootstrap pulls an extra image. Not needed for the PoC.
   webAdmin:
     enabled: false
-  # Only Eventd, Alarmd, Trapd, Provisiond, Vacuumd and the Jetty/Karaf
-  # services are needed to hold nodes and turn traps into alarms.
+  # Only Eventd, Alarmd, Trapd, EventTranslator, Provisiond, Vacuumd and the
+  # Jetty/Karaf services are needed to hold nodes and turn traps into alarms.
   # Vacuumd stays on: it runs the key-value TTL reaper and DB maintenance.
   daemons:
     ackd: {enabled: false}
@@ -28,7 +28,12 @@ core:
     collectd: {enabled: false}
     discovery: {enabled: false}
     enhancedlinkd: {enabled: false}
-    eventtranslator: {enabled: false}
+    # EventTranslator stays on. The stock linkDown event
+    # uei.opennms.org/generic/traps/SNMP_Link_Down is logmsg dest="donotpersist"
+    # (Eventd debug log: "marked as 'donotpersist'; not processing event"), so a
+    # linkDown trap never becomes an event or alarm. Only the translator rewrites it to
+    # uei.opennms.org/translator/traps/SNMP_Link_Down, which carries the alarm-data.
+    eventtranslator: {enabled: true}
     notifd: {enabled: false}
     passivestatusd: {enabled: false}
     perspectivepoller: {enabled: false}
