@@ -100,6 +100,10 @@ lab-down:
 lab-addons:
 	lab/scripts/cluster-addons.sh
 
+.PHONY: lab-sources
+lab-sources:
+	lab/scripts/source-pool.sh
+
 .PHONY: phase0-mechanism
 phase0-mechanism:
 	lab/phase0/resize-check.sh
