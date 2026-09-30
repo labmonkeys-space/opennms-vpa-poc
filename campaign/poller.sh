@@ -19,7 +19,7 @@ sample() {
   vpas="$(kubectl -n "$ns" get vpa -o json)"
   jq -r --arg ts "$ts" --argjson u "$usage" '
     .items[] as $p | $p.spec.containers[] as $c |
-    ([$u.items[] | select(.metadata.name == $p.metadata.name) | .containers[] | select(.name == $c.name) | .usage] | .[0] // {}) as $use |
+    ([($u.items // [])[] | select(.metadata.name == $p.metadata.name) | .containers[] | select(.name == $c.name) | .usage] | .[0] // {}) as $use |
     ($p.status.containerStatuses // [] | map(select(.name == $c.name)) | .[0]) as $st |
     [$ts, $p.metadata.name, $c.name, ($use.cpu // ""), ($use.memory // ""),
      ($st.resources.requests.cpu // $c.resources.requests.cpu // ""),
@@ -43,7 +43,12 @@ case "${1:-}" in
     mkdir -p "$dir"
     echo "ts,pod,container,cpu_usage,mem_usage,req_cpu,req_mem,lim_cpu,lim_mem,restarts,last_reason" > "$dir/pods.csv"
     echo "ts,vpa,target_cpu,target_mem,lower_cpu,lower_mem,upper_cpu,upper_mem" > "$dir/vpa.csv"
-    ( while true; do sample "$dir" || true; sleep "$interval"; done ) >/dev/null 2>&1 &
+    ( while true; do
+        { sample "$dir" 2>&1 >/dev/null || true; } | while IFS= read -r line; do
+          printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$line" >> "$dir/poller.log"
+        done
+        sleep "$interval"
+      done ) >/dev/null 2>&1 &
     echo $! > "$pid_file"
     echo "poller started pid $! -> ${dir#"$campaign_root/"}"
     ;;
