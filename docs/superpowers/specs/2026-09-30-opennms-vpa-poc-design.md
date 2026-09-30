@@ -76,12 +76,16 @@ The trap Service maps port 162 to the Minion's 1162. Its type is a value: NodePo
 
 Core daemons are switched through the existing chart's `daemons:` block, which maps to the image's `CORE_SERVICE_*_ENABLED` variables.
 
-- On: Eventd, Alarmd, Trapd, Provisiond, Vacuumd, Karaf, JettyServer, KarafStartupMonitor.
-- Off: Pollerd, Collectd, Telemetryd, EnhancedLinkd, Discovery, PerspectivePoller, Bsmd, Ticketer, Notifd, Scriptd, Rtcd, PassiveStatusd, EventTranslator, Ackd, Actiond, Statsd, Queued.
+- On: Eventd, Alarmd, Trapd, Provisiond, Vacuumd, Karaf, JettyServer, KarafStartupMonitor, EventTranslator.
+- Off: Pollerd, Collectd, Telemetryd, EnhancedLinkd, Discovery, PerspectivePoller, Bsmd, Ticketer, Notifd, Scriptd, Rtcd, PassiveStatusd, Ackd, Actiond, Statsd, Queued.
 - Already off by default in 36.0.4: Syslogd, SnmpPoller, Correlator.
 
+EventTranslator stays on because the stock SNMP linkDown trap event is marked do-not-persist.
+Only EventTranslator's rewrite to `uei.opennms.org/translator/traps/SNMP_Link_Down` raises an alarm (verified in Phase 0).
 Vacuumd stays on because it runs the key-value store TTL reaper and the database maintenance automations.
 Queued only buffers time-series writes, and nothing collects data, so it is off.
+
+`make deploy` requires Helm 4, because it passes `--force-conflicts`.
 
 Each "off" entry must be verified in Phase 1, because daemons can depend on beans another daemon exports.
 Any daemon that cannot be disabled is recorded with the failure it caused.
