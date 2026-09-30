@@ -1,0 +1,18 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+#
+# One release per namespace. Object names are fixed (postgresql, kafka, core,
+# minion) so the subcharts can address each other without templating.
+
+core:
+  fullnameOverride: core
+  postgresql:
+    host: postgresql
+  kafka:
+    bootstrapServers: kafka:9092
+
+minion:
+  fullnameOverride: minion
+  location: poc
+  kafka:
+    bootstrapServers: kafka:9092

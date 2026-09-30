@@ -6,3 +6,16 @@ openspec/
 
 # Run data too large for git
 runs/**/raw/
+
+# Build and dependency output
+build/
+vendor/
+charts/opennms-vpa/charts/
+charts/opennms-vpa/Chart.lock
+
+# Local lab settings and state (real hosts and addresses)
+lab/lab.env
+lab/.state/
+
+# Terms blocked by make check-public; never committed
+.check-public-terms
