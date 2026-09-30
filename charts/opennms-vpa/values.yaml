@@ -32,3 +32,28 @@ postgresql:
   resources:
     requests: {cpu: 250m, memory: 512Mi}
     limits: {memory: 512Mi}
+
+kafka:
+  image: apache/kafka:3.9.1
+  # 22-character base64 cluster id used to format storage on first start.
+  clusterId: MkU3OEVBNTcwNTJENDM2Qk
+  storage: 5Gi
+  storageClassName: ""
+  # Traps and RPC messages are consumed within seconds. One hour keeps disk small.
+  retentionMs: 3600000
+  # Applies to every auto-created topic, including OpenNMS.Sink.Trap. Core's
+  # trap consumer parallelism is capped by this number, and VPA cannot change it.
+  numPartitions: 1
+  # Kafka lives on the page cache, so its heap stays small.
+  #   UseG1GC:              ergonomics picks SerialGC below 2 CPUs or ~1792 MiB.
+  #   MaxRAMPercentage:     heap follows the container limit after a restart.
+  #   InitialRAMPercentage: resident memory starts low so VPA sees real demand.
+  #   G1PeriodicGCInterval: returns unused heap to the OS.
+  heapOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=40 -XX:InitialRAMPercentage=10 -XX:G1PeriodicGCInterval=60000"
+  # Starting values so the stack starts. Phase 1 replaces them with the floor.
+  resources:
+    requests: {cpu: 250m, memory: 1Gi}
+    limits: {memory: 1Gi}
+  resizePolicy:
+    - {resourceName: cpu, restartPolicy: NotRequired}
+    - {resourceName: memory, restartPolicy: RestartContainer}
