@@ -94,3 +94,7 @@ lab-down:
 .PHONY: lab-addons
 lab-addons:
 	lab/scripts/cluster-addons.sh
+
+.PHONY: phase0-mechanism
+phase0-mechanism:
+	lab/phase0/resize-check.sh
