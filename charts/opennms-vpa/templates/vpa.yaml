@@ -1,0 +1,45 @@
+{{- /*
+Copyright 2026 Ronny Trommer <ronny@no42.org>
+SPDX-License-Identifier: Apache-2.0
+
+One VerticalPodAutoscaler per component.
+- minReplicas: 1   the updater skips workloads below --min-replicas (default 2),
+                   and every component here runs one replica.
+- RequestsAndLimits scales the memory limit with the request, which the JVM heap
+                   percentage follows. CPU has no limit, so none is added.
+- "*" mode Off     leaves init containers and sidecars alone.
+*/ -}}
+{{- if .Values.vpa.enabled }}
+{{- $modes := list "Off" "Initial" "Recreate" "InPlaceOrRecreate" }}
+{{- range $key, $c := .Values.vpa.components }}
+{{- if not (has $c.updateMode $modes) }}
+{{- fail (printf "vpa.components.%s.updateMode %q is not one of Off, Initial, Recreate, InPlaceOrRecreate" $key $c.updateMode) }}
+{{- end }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ $key }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ $key }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: {{ $c.kind }}
+    name: {{ $c.name }}
+  updatePolicy:
+    updateMode: {{ $c.updateMode | quote }}
+    minReplicas: 1
+  resourcePolicy:
+    containerPolicies:
+      - containerName: {{ $c.container | quote }}
+        controlledResources: ["cpu", "memory"]
+        controlledValues: RequestsAndLimits
+        minAllowed: {{- toYaml $c.minAllowed | nindent 10 }}
+        maxAllowed: {{- toYaml $c.maxAllowed | nindent 10 }}
+      - containerName: "*"
+        mode: "Off"
+{{- end }}
+{{- end }}

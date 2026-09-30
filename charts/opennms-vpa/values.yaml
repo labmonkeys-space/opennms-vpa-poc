@@ -128,3 +128,39 @@ trapService:
   # NodePort in the lab, LoadBalancer where the cluster provides one.
   type: NodePort
   nodePort: 30162
+
+vpa:
+  enabled: true
+  # minAllowed and maxAllowed are starting bounds. Phase 1 sets minAllowed to
+  # the measured floor; Phase 3 sets maxAllowed from the peak plus headroom.
+  # Keep each JVM's ActiveProcessorCount equal to its maxAllowed CPU.
+  components:
+    postgresql:
+      kind: StatefulSet
+      name: postgresql
+      container: postgresql
+      # shared_buffers needs a restart and a config change; apply by Helm upgrade.
+      updateMode: "Off"
+      minAllowed: {cpu: 100m, memory: 256Mi}
+      maxAllowed: {cpu: "2", memory: 4Gi}
+    kafka:
+      kind: StatefulSet
+      name: kafka
+      container: kafka
+      updateMode: InPlaceOrRecreate
+      minAllowed: {cpu: 100m, memory: 512Mi}
+      maxAllowed: {cpu: "2", memory: 4Gi}
+    core:
+      kind: StatefulSet
+      name: core
+      container: core
+      updateMode: InPlaceOrRecreate
+      minAllowed: {cpu: 250m, memory: 2Gi}
+      maxAllowed: {cpu: "4", memory: 12Gi}
+    minion:
+      kind: StatefulSet
+      name: minion
+      container: minion
+      updateMode: InPlaceOrRecreate
+      minAllowed: {cpu: 100m, memory: 1Gi}
+      maxAllowed: {cpu: "2", memory: 4Gi}
