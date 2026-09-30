@@ -53,8 +53,8 @@ spec:
             - {name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: "1"}
             - {name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS, value: "0"}
             - {name: KAFKA_LOG_DIRS, value: "/var/lib/kafka/data"}
-            - {name: KAFKA_LOG_RETENTION_MS, value: {{ .Values.kafka.retentionMs | quote }}}
-            - {name: KAFKA_NUM_PARTITIONS, value: {{ .Values.kafka.numPartitions | quote }}}
+            - {name: KAFKA_LOG_RETENTION_MS, value: {{ .Values.kafka.retentionMs | int64 | quote }}}
+            - {name: KAFKA_NUM_PARTITIONS, value: {{ .Values.kafka.numPartitions | int64 | quote }}}
             - {name: KAFKA_HEAP_OPTS, value: {{ .Values.kafka.heapOpts | quote }}}
           ports:
             - name: kafka

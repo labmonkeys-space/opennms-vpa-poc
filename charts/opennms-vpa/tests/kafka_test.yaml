@@ -44,3 +44,12 @@ tests:
           value:
             - {resourceName: "cpu", restartPolicy: "NotRequired"}
             - {resourceName: "memory", restartPolicy: "RestartContainer"}
+  - it: renders default retention and partitions as integers, not scientific notation
+    documentSelector: {path: "kind", value: "StatefulSet"}
+    asserts:
+      - contains:
+          path: "spec.template.spec.containers[0].env"
+          content: {name: "KAFKA_LOG_RETENTION_MS", value: "3600000"}
+      - contains:
+          path: "spec.template.spec.containers[0].env"
+          content: {name: "KAFKA_NUM_PARTITIONS", value: "1"}
