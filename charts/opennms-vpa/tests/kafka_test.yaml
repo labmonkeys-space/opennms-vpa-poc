@@ -23,7 +23,7 @@ tests:
     asserts:
       - contains:
           path: "spec.template.spec.containers[0].env"
-          content: {name: "KAFKA_HEAP_OPTS", value: "-XX:+UseG1GC -XX:MaxRAMPercentage=40 -XX:InitialRAMPercentage=10 -XX:G1PeriodicGCInterval=60000"}
+          content: {name: "KAFKA_HEAP_OPTS", value: "-XX:+UseG1GC -XX:MaxRAMPercentage=40 -XX:InitialRAMPercentage=10 -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=2"}
   - it: sets retention and partitions from values
     documentSelector: {path: "kind", value: "StatefulSet"}
     set:
