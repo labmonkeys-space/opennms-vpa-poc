@@ -1,0 +1,9 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+#
+# Arm B: VPA resizes CPU and memory. A memory change restarts the container.
+vpa:
+  components:
+    core: {controlledResources: [cpu, memory]}
+    minion: {controlledResources: [cpu, memory]}
+    kafka: {controlledResources: [cpu, memory]}

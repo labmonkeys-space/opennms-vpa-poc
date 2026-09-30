@@ -141,6 +141,9 @@ vpa:
   # the measured floor; Phase 3 sets maxAllowed from the peak plus headroom.
   # Keep each JVM's ActiveProcessorCount equal to its maxAllowed CPU.
   components:
+    # Each component may set controlledResources. Default [cpu, memory] (arm B).
+    # campaign/values/arm-a.yaml restricts core, minion and kafka to [cpu]:
+    # CPU changes in place, memory follows the recommendation by Helm upgrade.
     postgresql:
       kind: StatefulSet
       name: postgresql

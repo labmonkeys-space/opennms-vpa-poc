@@ -44,3 +44,17 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: 'vpa.components.core.updateMode "Auto" is not one of Off, Initial, Recreate, InPlaceOrRecreate'
+  - it: defaults controlledResources to cpu and memory
+    documentSelector: {path: metadata.name, value: core}
+    asserts:
+      - equal:
+          path: spec.resourcePolicy.containerPolicies[0].controlledResources
+          value: [cpu, memory]
+  - it: lets an arm restrict a component to cpu
+    documentSelector: {path: metadata.name, value: minion}
+    set:
+      vpa.components.minion.controlledResources: [cpu]
+    asserts:
+      - equal:
+          path: spec.resourcePolicy.containerPolicies[0].controlledResources
+          value: [cpu]
