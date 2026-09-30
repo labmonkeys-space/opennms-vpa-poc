@@ -9,17 +9,26 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+trim() {
+  local v="${1//$'\r'/}"
+  v="${v#"${v%%[![:space:]]*}"}"
+  v="${v%"${v##*[![:space:]]}"}"
+  printf '%s' "$v"
+}
+
 terms=()
 if [[ -f .check-public-terms ]]; then
-  while IFS= read -r line; do
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="$(trim "$line")"
     [[ -z "$line" || "$line" == \#* ]] || terms+=("$line")
   done < .check-public-terms
 fi
 if [[ -f lab/lab.env ]]; then
-  while IFS= read -r value; do
+  while IFS= read -r value || [[ -n "$value" ]]; do
+    value="$(trim "$value")"
     [[ -n "$value" ]] && terms+=("${value//./\\.}")
   done < <(grep -E '^(PVE_HOST|K8S_IP|LOADGEN_IP|GATEWAY|DNS_SERVERS)=' lab/lab.env \
-             | cut -d= -f2- | tr -s ' ,' '\n' | cut -d/ -f1)
+             | cut -d= -f2- | tr -d $'\r\'"' | tr -s ' ,' '\n' | cut -d/ -f1)
 fi
 if [[ "${#terms[@]}" == 0 ]]; then
   echo "check-public: no terms configured. Create .check-public-terms first." >&2
