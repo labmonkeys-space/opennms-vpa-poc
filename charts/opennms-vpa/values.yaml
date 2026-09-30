@@ -16,3 +16,19 @@ minion:
   location: poc
   kafka:
     bootstrapServers: kafka:9092
+
+postgresql:
+  image: postgres:18
+  storage: 5Gi
+  storageClassName: ""
+  # PostgreSQL does not follow a resized pod on its own: shared_buffers is fixed
+  # at start. Its VPA runs in Off mode and these values are changed by a Helm
+  # upgrade after reading the recommendation.
+  sharedBuffers: 128MB
+  # Every backend costs memory. Must cover Core's JDBC pool (default 50) plus
+  # the installer and admin sessions.
+  maxConnections: 100
+  # Starting values so the stack starts. Phase 1 replaces them with the floor.
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {memory: 512Mi}

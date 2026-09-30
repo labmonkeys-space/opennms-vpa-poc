@@ -1,0 +1,40 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+suite: postgresql
+templates:
+  - templates/postgresql.yaml
+release:
+  name: poc
+  namespace: poc
+tests:
+  - it: runs postgres:18 as StatefulSet postgresql with the PG 18 data path
+    documentSelector: {path: "kind", value: "StatefulSet"}
+    asserts:
+      - equal: {path: "metadata.name", value: "postgresql"}
+      - equal: {path: "spec.template.spec.containers[0].name", value: "postgresql"}
+      - equal: {path: "spec.template.spec.containers[0].image", value: "postgres:18"}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: "data", mountPath: "/var/lib/postgresql"}
+  - it: takes the superuser from the Core chart's lab-mode Secret
+    documentSelector: {path: "kind", value: "StatefulSet"}
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: POSTGRES_PASSWORD
+            valueFrom: {secretKeyRef: {name: "poc-opennms-pg-superuser", key: "password"}}
+  - it: passes memory settings as server arguments
+    documentSelector: {path: "kind", value: "StatefulSet"}
+    set:
+      postgresql.sharedBuffers: 64MB
+      postgresql.maxConnections: 80
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value: ["-c", "shared_buffers=64MB", "-c", "max_connections=80"]
+  - it: exposes a headless Service named postgresql
+    documentSelector: {path: "kind", value: "Service"}
+    asserts:
+      - equal: {path: "metadata.name", value: "postgresql"}
+      - equal: {path: "spec.clusterIP", value: "None"}
