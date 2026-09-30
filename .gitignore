@@ -8,8 +8,9 @@ openspec/
 # IDE
 .idea/
 
-# Run data too large for git
-runs/**/raw/
+# Design docs, plans and run results stay local
+docs/
+runs/
 
 # Build and dependency output
 build/
