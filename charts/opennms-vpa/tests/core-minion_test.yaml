@@ -1,0 +1,44 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+suite: core and minion settings
+release:
+  name: poc
+  namespace: poc
+tests:
+  - it: names the Core StatefulSet core and disables unused daemons
+    template: charts/core/templates/statefulset.yaml
+    asserts:
+      - equal: {path: metadata.name, value: core}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: CORE_SERVICE_POLLERD_ENABLED, value: "false"}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: CORE_SERVICE_COLLECTD_ENABLED, value: "false"}
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: CORE_SERVICE_TRAPD_ENABLED, value: "false"}
+      - equal:
+          path: spec.template.spec.containers[0].resizePolicy
+          value:
+            - {resourceName: cpu, restartPolicy: NotRequired}
+            - {resourceName: memory, restartPolicy: RestartContainer}
+  - it: gives Core G1 and a percentage heap with no fixed -Xmx
+    template: charts/core/templates/core-configmap.yaml
+    asserts:
+      - matchRegex: {path: data.JAVA_OPTS, pattern: '-XX:\+UseG1GC'}
+      - matchRegex: {path: data.JAVA_OPTS, pattern: '-XX:MaxRAMPercentage=\d+'}
+      - matchRegex: {path: data.JAVA_OPTS, pattern: '-XX:ActiveProcessorCount=\d+'}
+      - notMatchRegex: {path: data.JAVA_OPTS, pattern: '-Xmx'}
+  - it: runs the Minion with the cgroup heap wrapper and a resize policy
+    template: charts/minion/templates/statefulset.yaml
+    asserts:
+      - equal: {path: metadata.name, value: minion}
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: [/bin/bash, /opt/heap-from-cgroup/heap-from-cgroup.sh]
+      - equal:
+          path: spec.template.spec.containers[0].resizePolicy
+          value:
+            - {resourceName: cpu, restartPolicy: NotRequired}
+            - {resourceName: memory, restartPolicy: RestartContainer}

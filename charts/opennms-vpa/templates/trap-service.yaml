@@ -1,0 +1,33 @@
+{{- /*
+Copyright 2026 Ronny Trommer <ronny@no42.org>
+SPDX-License-Identifier: Apache-2.0
+
+SNMP trap ingress to the Minion. SNMPv2c traps are matched to nodes by the
+packet source address, so NodePort and LoadBalancer use
+externalTrafficPolicy: Local to avoid SNAT.
+*/ -}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minion-traps
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: minion-traps
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: {{ .Values.trapService.type }}
+  {{- if ne .Values.trapService.type "ClusterIP" }}
+  externalTrafficPolicy: Local
+  {{- end }}
+  selector:
+    app.kubernetes.io/name: minion
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: snmp-trap
+      protocol: UDP
+      port: 162
+      targetPort: 1162
+      {{- if and (eq .Values.trapService.type "NodePort") .Values.trapService.nodePort }}
+      nodePort: {{ .Values.trapService.nodePort | int }}
+      {{- end }}

@@ -1,0 +1,28 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+suite: trap service
+templates:
+  - templates/trap-service.yaml
+release:
+  name: poc
+  namespace: poc
+tests:
+  - it: forwards UDP 162 to the Minion on 1162 and keeps the source address
+    asserts:
+      - equal: {path: metadata.name, value: minion-traps}
+      - equal: {path: spec.type, value: NodePort}
+      - equal: {path: spec.externalTrafficPolicy, value: Local}
+      - equal:
+          path: spec.ports[0]
+          value: {name: snmp-trap, protocol: UDP, port: 162, targetPort: 1162, nodePort: 30162}
+      - equal:
+          path: spec.selector
+          value:
+            app.kubernetes.io/name: minion
+            app.kubernetes.io/instance: poc
+  - it: omits externalTrafficPolicy and nodePort for ClusterIP
+    set:
+      trapService.type: ClusterIP
+    asserts:
+      - notExists: {path: spec.externalTrafficPolicy}
+      - notExists: {path: "spec.ports[0].nodePort"}
