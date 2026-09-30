@@ -77,7 +77,8 @@ The trap Service maps port 162 to the Minion's 1162. Its type is a value: NodePo
 Core daemons are switched through the existing chart's `daemons:` block, which maps to the image's `CORE_SERVICE_*_ENABLED` variables.
 
 - On: Eventd, Alarmd, Trapd, Provisiond, Vacuumd, Karaf, JettyServer, KarafStartupMonitor.
-- Off: Pollerd, Collectd, Telemetryd, EnhancedLinkd, Discovery, PerspectivePoller, Bsmd, Ticketer, Notifd, Scriptd, Rtcd, PassiveStatusd, EventTranslator, Ackd, Queued, Syslogd, SnmpPoller, Correlator.
+- Off: Pollerd, Collectd, Telemetryd, EnhancedLinkd, Discovery, PerspectivePoller, Bsmd, Ticketer, Notifd, Scriptd, Rtcd, PassiveStatusd, EventTranslator, Ackd, Actiond, Statsd, Queued.
+- Already off by default in 36.0.4: Syslogd, SnmpPoller, Correlator.
 
 Vacuumd stays on because it runs the key-value store TTL reaper and the database maintenance automations.
 Queued only buffers time-series writes, and nothing collects data, so it is off.
@@ -94,6 +95,9 @@ Any daemon that cannot be disabled is recorded with the failure it caused.
 3. **The JVM reads the cgroup limit only at startup.** An in-place memory increase does not grow the heap. The container `resizePolicy` is therefore `cpu: NotRequired` and `memory: RestartContainer`. A memory resize restarts the container in the same pod, keeping the PVC and the node.
 4. **The Minion image forces `-Xmx`.** `opennms-container/minion/container-fs/entrypoint.sh:24` always appends `-Xmx${JAVA_MAX_MEM:-2g}`, and `-Xmx` overrides `MaxRAMPercentage`. The chart wraps the entrypoint with a script that reads `/sys/fs/cgroup/memory.max` at every container start and exports `JAVA_MIN_MEM` and `JAVA_MAX_MEM` as a configurable percentage of it. This is also filed as an upstream image improvement.
 5. **The JVM keeps memory it has committed.** Without uncommit, resident memory only grows, VPA reads that as demand, and requests only ratchet upward. G1 periodic collection returns unused heap to the OS.
+6. **At small sizes the JVM picks SerialGC.** JVM ergonomics selects SerialGC below 2 CPUs or about 1792 MiB of memory, and then G1 uncommit never runs. Every JVM sets `-XX:+UseG1GC` explicitly.
+7. **The Core image ships a fixed heap.** The Core Dockerfile sets `ENV JAVA_OPTS="-Xmx1024m -XX:MaxMetaspaceSize=512m"`. The chart's `javaOpts` replaces that variable, so Core's flags must always be set through it.
+8. **The VPA updater skips single-replica workloads by default.** Its `--min-replicas` flag defaults to 2, and every component here runs one replica. Each VPA object sets `updatePolicy.minReplicas: 1`, which works even where the updater flags cannot be changed.
 
 ### Per-component settings
 
@@ -120,6 +124,8 @@ Each VPA object sets:
 - `maxAllowed` from the Phase 3 peak plus headroom.
 - `controlledResources: [cpu, memory]`.
 - `controlledValues: RequestsAndLimits`.
+- `updatePolicy.minReplicas: 1`.
+- A `containerName: "*"` policy with `mode: "Off"`, so init containers and sidecars are left alone.
 
 ### Changes to the existing charts
 
