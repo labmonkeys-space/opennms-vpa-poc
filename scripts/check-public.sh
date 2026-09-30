@@ -5,7 +5,7 @@
 # Fails when tracked files, history or commit messages contain terms that must
 # stay out of this public repository. Terms come from two gitignored sources:
 # .check-public-terms (one extended regex per line) and the real lab hosts and
-# addresses in lab/lab.env.
+# addresses and VMIDs in lab/lab.env.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -29,6 +29,12 @@ if [[ -f lab/lab.env ]]; then
     [[ -n "$value" ]] && terms+=("${value//./\\.}")
   done < <(grep -E '^(PVE_HOST|K8S_IP|LOADGEN_IP|GATEWAY|DNS_SERVERS)=' lab/lab.env \
              | cut -d= -f2- | tr -d $'\r\'"' | tr -s ' ,' '\n' | cut -d/ -f1)
+  # VMIDs are short numbers, so match them only as whole digit runs.
+  while IFS= read -r value || [[ -n "$value" ]]; do
+    value="$(trim "$value")"
+    [[ -n "$value" ]] && terms+=("(^|[^0-9])${value}([^0-9]|\$)")
+  done < <(grep -E '^(K8S_VMID|LOADGEN_VMID)=' lab/lab.env \
+             | cut -d= -f2- | tr -d $'\r\'"')
 fi
 if [[ "${#terms[@]}" == 0 ]]; then
   echo "check-public: no terms configured. Create .check-public-terms first." >&2
