@@ -16,7 +16,7 @@ run_case() {
   rm -rf "$repo"; mkdir -p "$repo/scripts" "$repo/lab"
   cp "$src/scripts/check-public.sh" "$repo/scripts/"
   echo 'unrelated-term-xyz' > "$repo/.check-public-terms"
-  printf 'K8S_VMID=9101\nLOADGEN_VMID=311\n' > "$repo/lab/lab.env"
+  printf 'K8S_VMID=4242\nLOADGEN_VMID=4343\n' > "$repo/lab/lab.env"
   printf '.check-public-terms\nlab/lab.env\n' > "$repo/.gitignore"
   printf '%s\n' "$content" > "$repo/notes.txt"
   (cd "$repo" && git init -q . && git config user.email t@example.com \
@@ -27,7 +27,7 @@ run_case() {
   fi
 }
 
-run_case 'size 2105 and 3110' 0
-run_case 'K8S_VMID=9101' 1
-run_case 'id: 311' 1
+run_case 'size 42425 and 14343' 0
+run_case 'K8S_VMID=4242' 1
+run_case 'id: 4343' 1
 echo "check-public_test: ok"
