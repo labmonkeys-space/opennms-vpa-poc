@@ -79,6 +79,7 @@ lab-up:
 
 .PHONY: lab-kubeconfig
 lab-kubeconfig:
+	@mkdir -p $(LAB_STATE)
 	@source $(LAB_ENV); $(LAB_SSH) lab@$${K8S_IP%/*} cat .kube/config > $(LAB_STATE)/kubeconfig
 	@chmod 600 $(LAB_STATE)/kubeconfig
 	KUBECONFIG=$(LAB_STATE)/kubeconfig kubectl get nodes -o wide
