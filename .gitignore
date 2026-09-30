@@ -24,3 +24,7 @@ lab/.state/
 
 # Terms blocked by make check-public; never committed
 .check-public-terms
+
+# Python
+__pycache__/
+*.pyc

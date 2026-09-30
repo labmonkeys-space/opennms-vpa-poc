@@ -15,6 +15,7 @@ help:
 	@echo "  lint          helm lint the umbrella"
 	@echo "  unittest      helm-unittest suites of the umbrella"
 	@echo "  test-scripts  shellcheck and run the shell tests"
+	@echo "  test-tools    Run Python tool tests"
 	@echo "  render        Render the umbrella and validate with kubeconform"
 	@echo "  check-public  Fail on content that must not be in this public repo"
 	@echo "  test          All of the above checks"
@@ -47,6 +48,10 @@ test-scripts:
 	@for t in tests/*_test.sh lab/tests/*_test.sh; do [ -e "$$t" ] || continue; shellcheck -S warning "$$t" && bash "$$t"; done
 	@shellcheck -S warning scripts/*.sh $$(ls lab/scripts/*.sh lab/phase0/*.sh 2>/dev/null)
 
+.PHONY: test-tools
+test-tools:
+	python3 -m unittest discover -s tools/tests -v
+
 .PHONY: render
 render: deps
 	@mkdir -p $(BUILD_DIR)
@@ -58,7 +63,7 @@ check-public:
 	scripts/check-public.sh
 
 .PHONY: test
-test: lint unittest test-scripts render check-public
+test: lint unittest test-scripts test-tools render check-public
 
 LAB_ENV   := lab/lab.env
 LAB_STATE := lab/.state
