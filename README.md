@@ -12,7 +12,8 @@ The design is in `docs/superpowers/specs/2026-09-30-opennms-vpa-poc-design.md`.
 ## Requirements
 
 - A checkout of `labmonkeys-space/opennms-helm-charts` on branch `feat/vpa-hooks` next to this repo, or set `HELM_CHARTS_DIR`.
-- `helm` with the `helm-unittest` plugin, `shellcheck`, `kubeconform`, `envsubst`, `jq`.
+- `helm` 4 (the deploy target uses `--force-conflicts`) with the `helm-unittest` plugin.
+- `shellcheck`, `kubeconform`, `envsubst`, `jq`.
 
 ## Checks
 

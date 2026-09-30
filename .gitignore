@@ -3,6 +3,10 @@ _bmad-output/
 _bmad/
 openspec/
 .claude/
+.superpowers/
+
+# IDE
+.idea/
 
 # Run data too large for git
 runs/**/raw/
