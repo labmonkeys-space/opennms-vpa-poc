@@ -1,0 +1,13 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+version: 2
+ethernets:
+  eth0:
+    match:
+      name: "e*"
+    addresses: [${VM_IP}]
+    routes:
+      - to: default
+        via: ${GATEWAY}
+    nameservers:
+      addresses: [${DNS_LIST}]

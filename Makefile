@@ -59,3 +59,33 @@ check-public:
 
 .PHONY: test
 test: lint unittest test-scripts render check-public
+
+LAB_ENV   := lab/lab.env
+LAB_STATE := lab/.state
+LAB_SSH    = ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$(LAB_STATE)/known_hosts
+
+.PHONY: lab-up
+lab-up:
+	@test -f $(LAB_ENV) || { echo "Create $(LAB_ENV) from lab/lab.env.example"; exit 1; }
+	@mkdir -p $(LAB_STATE)
+	@source $(LAB_ENV); \
+	  lab/scripts/pve-vm.sh create vpa-k8s $$K8S_VMID $$K8S_IP 16 49152 200 lab/cloud-init/k8s-user-data.yaml.tmpl; \
+	  lab/scripts/pve-vm.sh create vpa-loadgen $$LOADGEN_VMID $$LOADGEN_IP 8 8192 40 lab/cloud-init/loadgen-user-data.yaml.tmpl; \
+	  for ip in $${K8S_IP%/*} $${LOADGEN_IP%/*}; do \
+	    until $(LAB_SSH) -o ConnectTimeout=5 lab@$$ip true 2>/dev/null; do sleep 10; done; \
+	    $(LAB_SSH) lab@$$ip cloud-init status --wait; \
+	  done
+	@$(MAKE) --no-print-directory lab-kubeconfig
+
+.PHONY: lab-kubeconfig
+lab-kubeconfig:
+	@source $(LAB_ENV); $(LAB_SSH) lab@$${K8S_IP%/*} cat .kube/config > $(LAB_STATE)/kubeconfig
+	@chmod 600 $(LAB_STATE)/kubeconfig
+	KUBECONFIG=$(LAB_STATE)/kubeconfig kubectl get nodes -o wide
+
+.PHONY: lab-down
+lab-down:
+	@source $(LAB_ENV); \
+	  lab/scripts/pve-vm.sh destroy vpa-loadgen $$LOADGEN_VMID; \
+	  lab/scripts/pve-vm.sh destroy vpa-k8s $$K8S_VMID
+	rm -rf $(LAB_STATE)
