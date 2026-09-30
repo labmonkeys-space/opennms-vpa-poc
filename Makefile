@@ -90,3 +90,7 @@ lab-down:
 	  lab/scripts/pve-vm.sh destroy vpa-loadgen $$LOADGEN_VMID; \
 	  lab/scripts/pve-vm.sh destroy vpa-k8s $$K8S_VMID
 	rm -rf $(LAB_STATE)
+
+.PHONY: lab-addons
+lab-addons:
+	lab/scripts/cluster-addons.sh
