@@ -37,10 +37,19 @@ sets+=(--set "$comp.resources.requests.memory=$mem" --set "$comp.resources.limit
 if [[ -n "$cpu" ]]; then sets+=(--set "$comp.resources.requests.cpu=$cpu" --set "$comp.resources.limits.cpu=$cpu"); fi
 
 mkdir -p "$dir"
+# A pod whose limit changes in place (no resizePolicy restart) or whose size
+# is unchanged would skip a cold start, so a rung restarts it when needed.
+started_before="$(kubectl -n "$ns" get pod "$pod" -o jsonpath="{.status.containerStatuses[?(@.name==\"$comp\")].state.running.startedAt}" 2>/dev/null || true)"
 start=$(date +%s)
 helm upgrade --install poc "$campaign_root/charts/opennms-vpa" -n "$ns" --force-conflicts \
   -f "$campaign_root/campaign/values/nmt.yaml" "${sets[@]}" > "$dir/helm.txt"
 kubectl -n "$ns" rollout status "statefulset/$comp" --timeout="${ready_timeout}s" > "$dir/rollout.txt" 2>&1 || true
+started_after="$(kubectl -n "$ns" get pod "$pod" -o jsonpath="{.status.containerStatuses[?(@.name==\"$comp\")].state.running.startedAt}" 2>/dev/null || true)"
+if [[ -n "$started_before" && "$started_before" == "$started_after" ]]; then
+  echo "pod $pod was not restarted by the rollout; deleting it for a cold start" >> "$dir/rollout.txt"
+  kubectl -n "$ns" delete pod "$pod" --wait=true >> "$dir/rollout.txt" 2>&1
+  kubectl -n "$ns" wait --for=condition=Ready "pod/$pod" --timeout="${ready_timeout}s" >> "$dir/rollout.txt" 2>&1 || true
+fi
 ready=false
 kubectl -n "$ns" wait --for=condition=Ready "pod/$pod" --timeout=10s >/dev/null 2>&1 && ready=true
 ready_seconds=$(( $(date +%s) - start ))
