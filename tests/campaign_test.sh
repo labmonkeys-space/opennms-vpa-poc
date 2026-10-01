@@ -16,9 +16,15 @@ done
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 sleep 60 & live=$!
 echo "$live" > "$tmp/poller.pid"
-check "poller refuses to start twice" \
-  "! POLLER_PID_FILE='$tmp/poller.pid' bash '$root/campaign/poller.sh' start '$tmp/run' >/dev/null 2>&1"
-kill "$live"
+rc=0
+err="$(CAMPAIGN_KUBECONFIG=/nonexistent POLLER_PID_FILE="$tmp/poller.pid" bash "$root/campaign/poller.sh" start "$tmp/run" 2>&1 >/dev/null)" || rc=$?
+ok=false; [[ "$rc" -ne 0 && "$err" == *"already running"* ]] && ok=true
+check "poller refuses to start twice and says why" "$ok"
+# lib.sh ignores an inherited KUBECONFIG.
+got="$(KUBECONFIG=/inherited CAMPAIGN_KUBECONFIG=/chosen bash -c 'source "$1"; echo "$KUBECONFIG"' _ "$root/campaign/lib.sh")"
+ok=false; [[ "$got" == /chosen ]] && ok=true
+check "lib.sh uses CAMPAIGN_KUBECONFIG, not an inherited KUBECONFIG" "$ok"
+kill "$live"; wait "$live" 2>/dev/null || true
 
 # Review Focus 3: floor.sh must verify the running limit before it soaks.
 check "floor.sh checks the running memory limit" \

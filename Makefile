@@ -46,7 +46,7 @@ unittest: deps
 
 .PHONY: test-scripts
 test-scripts:
-	@for t in tests/*_test.sh lab/tests/*_test.sh; do [ -e "$$t" ] || continue; shellcheck -S warning "$$t" && bash "$$t"; done
+	@for t in tests/*_test.sh lab/tests/*_test.sh; do [ -e "$$t" ] || continue; shellcheck -x -S warning "$$t" || exit 1; bash "$$t" || exit 1; done
 	@shellcheck -x -S warning scripts/*.sh $$(ls lab/scripts/*.sh lab/phase0/*.sh campaign/*.sh 2>/dev/null)
 
 .PHONY: test-tools
