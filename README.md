@@ -34,7 +34,7 @@ At 1,000 and 2,000 traps/s a backlog built up in Kafka and was delivered after t
 The trap topic had a single partition.
 That the partition count caps Core's rate is an inference, because it was not tested with more partitions.
 - A Core resize cost about 1.3k to 1.8k traps at 500 traps/s.
-A Minion resize loses all traps sent during its outage window, because there is a single replica and nothing listens on the trap port meanwhile.
+A Minion resize loses about as many traps as arrive during its outage window, because there is a single replica and nothing listens on the trap port meanwhile.
 - Caveats: each arm ran once, on one lab node.
 The lab shortened the VPA recommender history to 1 h, so a default recommender reacts more slowly.
 - The campaign filed [NMS-20391](https://opennms.atlassian.net/browse/NMS-20391) (the Minion image forces `-Xmx`) and [NMS-20392](https://opennms.atlassian.net/browse/NMS-20392) (`/rest/health` reports unhealthy when unused daemons are disabled).

@@ -55,7 +55,7 @@ core:
   #   MaxMetaspaceSize, ReservedCodeCacheSize: bound non-heap so the percentage holds.
   #   G1PeriodicGCInterval:   returns unused heap to the OS.
   #   ActiveProcessorCount=8: without a CPU limit the JVM sizes pools to the node's
-  #                           cores; pin it to the VPA maxAllowed CPU instead.
+  #                           cores; pin it with the rule below instead.
   #                           Rule: ActiveProcessorCount = max(2, maxAllowed CPU rounded up to a whole core).
   #                           Core's uncapped VPA target was 4991m, x 1.5 = 7.5 CPU, so 8.
   javaOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=25 -XX:MaxMetaspaceSize=512m -XX:ReservedCodeCacheSize=240m -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=8"
@@ -90,7 +90,7 @@ minion:
     minPercent: 25
   #   UseG1GC, G1PeriodicGCInterval: as for Core.
   #   ActiveProcessorCount=2: sizes trapd.threads (default cores*2) and GC threads
-  #                           to the VPA maxAllowed CPU, not the node.
+  #                           from the rule below, not from the node.
   #                           Rule: ActiveProcessorCount = max(2, maxAllowed CPU rounded up to a whole core).
   javaOpts: "-XX:+UseG1GC -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=2"
   # Phase 1: runs/phase1-memory/20260930T215554Z-minion-768Mi floor 768Mi x 1.25 -> 1024Mi

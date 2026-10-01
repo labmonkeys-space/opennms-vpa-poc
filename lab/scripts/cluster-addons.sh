@@ -39,7 +39,7 @@ else
   if [[ ! -d "$src" ]]; then
     git clone --depth 1 --branch "$vpa_tag" "$vpa_repo" "$src"
   fi
-  (cd "$src/vertical-pod-autoscaler" && TAG="$VPA_VERSION" ./hack/vpa-up.sh)
+  (cd "$src/vertical-pod-autoscaler" && TAG="$VPA_VERSION" .//vpa-up.sh)
 fi
 
 # add_args <deployment> <arg>...: append flags once, keeping the existing ones.
