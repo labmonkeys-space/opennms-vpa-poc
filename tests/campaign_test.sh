@@ -8,7 +8,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
 check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; fail=1; fi; }
 
-for s in lib poller reset-recommender manifest traps-counted flood load-inventory floor; do
+for s in lib poller reset-recommender manifest traps-counted flood load-inventory floor ramp; do
   check "campaign/$s.sh exists" "[[ -f '$root/campaign/$s.sh' ]]"
 done
 
