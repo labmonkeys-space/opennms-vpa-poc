@@ -1,0 +1,55 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+suite: kafka
+templates:
+  - templates/kafka.yaml
+release:
+  name: poc
+  namespace: poc
+tests:
+  - it: runs apache/kafka 3.9.1 in combined KRaft mode
+    documentSelector: {path: "kind", value: "StatefulSet"}
+    asserts:
+      - equal: {path: "metadata.name", value: "kafka"}
+      - equal: {path: "spec.template.spec.containers[0].image", value: "apache/kafka:3.9.1"}
+      - contains:
+          path: "spec.template.spec.containers[0].env"
+          content: {name: "KAFKA_PROCESS_ROLES", value: "broker,controller"}
+      - contains:
+          path: "spec.template.spec.containers[0].env"
+          content: {name: "KAFKA_ADVERTISED_LISTENERS", value: "PLAINTEXT://kafka:9092"}
+  - it: replaces the image's fixed 1G heap with the configured heap options
+    documentSelector: {path: "kind", value: "StatefulSet"}
+    asserts:
+      - contains:
+          path: "spec.template.spec.containers[0].env"
+          content: {name: "KAFKA_HEAP_OPTS", value: "-XX:+UseG1GC -XX:MaxRAMPercentage=40 -XX:InitialRAMPercentage=10 -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=2"}
+  - it: sets retention and partitions from values
+    documentSelector: {path: "kind", value: "StatefulSet"}
+    set:
+      kafka.retentionMs: 600000
+      kafka.numPartitions: 4
+    asserts:
+      - contains:
+          path: "spec.template.spec.containers[0].env"
+          content: {name: "KAFKA_LOG_RETENTION_MS", value: "600000"}
+      - contains:
+          path: "spec.template.spec.containers[0].env"
+          content: {name: "KAFKA_NUM_PARTITIONS", value: "4"}
+  - it: renders the resize policy
+    documentSelector: {path: "kind", value: "StatefulSet"}
+    asserts:
+      - equal:
+          path: "spec.template.spec.containers[0].resizePolicy"
+          value:
+            - {resourceName: "cpu", restartPolicy: "NotRequired"}
+            - {resourceName: "memory", restartPolicy: "RestartContainer"}
+  - it: renders default retention and partitions as integers, not scientific notation
+    documentSelector: {path: "kind", value: "StatefulSet"}
+    asserts:
+      - contains:
+          path: "spec.template.spec.containers[0].env"
+          content: {name: "KAFKA_LOG_RETENTION_MS", value: "3600000"}
+      - contains:
+          path: "spec.template.spec.containers[0].env"
+          content: {name: "KAFKA_NUM_PARTITIONS", value: "1"}

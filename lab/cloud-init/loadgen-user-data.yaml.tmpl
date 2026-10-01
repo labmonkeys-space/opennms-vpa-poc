@@ -1,0 +1,17 @@
+#cloud-config
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+#
+# Trap sender. Phase 1+ tooling (flooder, nl6) is added by the campaign plan.
+hostname: vpa-loadgen
+preserve_hostname: false
+ssh_pwauth: false
+users:
+  - name: lab
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys: ["${SSH_PUBKEY}"]
+package_update: true
+packages: [snmp, python3, jq, curl]

@@ -1,0 +1,175 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+#
+# One release per namespace. Object names are fixed (postgresql, kafka, core,
+# minion) so the subcharts can address each other without templating.
+
+core:
+  fullnameOverride: core
+  postgresql:
+    host: postgresql
+  kafka:
+    bootstrapServers: kafka:9092
+  persistence:
+    size: 5Gi
+  # Nothing polls, so the ICMP sysctl is not needed.
+  icmp:
+    enabled: false
+  # Admin password bootstrap pulls an extra image. Not needed for the PoC.
+  webAdmin:
+    enabled: false
+  # Only Eventd, Alarmd, Trapd, EventTranslator, Provisiond, Vacuumd and the
+  # Jetty/Karaf services are needed to hold nodes and turn traps into alarms.
+  # Vacuumd stays on: it runs the key-value TTL reaper and DB maintenance.
+  daemons:
+    ackd: {enabled: false}
+    actiond: {enabled: false}
+    bsmd: {enabled: false}
+    collectd: {enabled: false}
+    discovery: {enabled: false}
+    enhancedlinkd: {enabled: false}
+    # EventTranslator stays on. The stock linkDown event
+    # uei.opennms.org/generic/traps/SNMP_Link_Down is logmsg dest="donotpersist"
+    # (Eventd debug log: "marked as 'donotpersist'; not processing event"), so a
+    # linkDown trap never becomes an event or alarm. Only the translator rewrites it to
+    # uei.opennms.org/translator/traps/SNMP_Link_Down, which carries the alarm-data.
+    eventtranslator: {enabled: true}
+    notifd: {enabled: false}
+    passivestatusd: {enabled: false}
+    perspectivepoller: {enabled: false}
+    pollerd: {enabled: false}
+    queued: {enabled: false}
+    rtcd: {enabled: false}
+    scriptd: {enabled: false}
+    statsd: {enabled: false}
+    telemetryd: {enabled: false}
+    ticketer: {enabled: false}
+  # Replaces the image default -Xmx1024m. Starting values; Phase 1 derives the
+  # percentage and caps from the measured non-heap size.
+  #   UseG1GC:                ergonomics picks SerialGC below 2 CPUs or ~1792 MiB.
+  #   MaxRAMPercentage=60:    heap follows the container limit after a restart.
+  #   InitialRAMPercentage=25: resident memory starts low so VPA sees real demand.
+  #   MaxMetaspaceSize, ReservedCodeCacheSize: bound non-heap so the percentage holds.
+  #   G1PeriodicGCInterval:   returns unused heap to the OS.
+  #   ActiveProcessorCount=4: without a CPU limit the JVM sizes pools to the node's
+  #                           cores; pin to the VPA maxAllowed CPU instead.
+  javaOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=25 -XX:MaxMetaspaceSize=512m -XX:ReservedCodeCacheSize=240m -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=4"
+  # Starting values so the stack starts. Phase 1 replaces them with the floor.
+  resources:
+    requests: {cpu: "1", memory: 3Gi}
+    limits: {memory: 3Gi}
+  resizePolicy:
+    - {resourceName: cpu, restartPolicy: NotRequired}
+    - {resourceName: memory, restartPolicy: RestartContainer}
+
+minion:
+  fullnameOverride: minion
+  location: poc
+  kafka:
+    bootstrapServers: kafka:9092
+  persistence:
+    size: 1Gi
+  icmp:
+    enabled: false
+  # The image forces -Xmx; derive it from the memory limit at every start.
+  heapFromCgroup:
+    enabled: true
+    maxPercent: 60
+    minPercent: 25
+  #   UseG1GC, G1PeriodicGCInterval: as for Core.
+  #   ActiveProcessorCount=2: sizes trapd.threads (default cores*2) and GC threads
+  #                           to the VPA maxAllowed CPU, not the node.
+  javaOpts: "-XX:+UseG1GC -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=2"
+  # Starting values so the stack starts. Phase 1 replaces them with the floor.
+  resources:
+    requests: {cpu: 500m, memory: 1536Mi}
+    limits: {memory: 1536Mi}
+  resizePolicy:
+    - {resourceName: cpu, restartPolicy: NotRequired}
+    - {resourceName: memory, restartPolicy: RestartContainer}
+
+postgresql:
+  image: postgres:18
+  storage: 5Gi
+  storageClassName: ""
+  # PostgreSQL does not follow a resized pod on its own: shared_buffers is fixed
+  # at start. Its VPA runs in Off mode and these values are changed by a Helm
+  # upgrade after reading the recommendation.
+  sharedBuffers: 128MB
+  # Every backend costs memory. Must cover Core's JDBC pool (default 50) plus
+  # the installer and admin sessions.
+  maxConnections: 100
+  # Starting values so the stack starts. Phase 1 replaces them with the floor.
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {memory: 512Mi}
+
+kafka:
+  image: apache/kafka:3.9.1
+  # 22-character base64 cluster id used to format storage on first start.
+  clusterId: MkU3OEVBNTcwNTJENDM2Qk
+  storage: 5Gi
+  storageClassName: ""
+  # Traps and RPC messages are consumed within seconds. One hour keeps disk small.
+  retentionMs: 3600000
+  # Applies to every auto-created topic, including OpenNMS.Sink.Trap. Core's
+  # trap consumer parallelism is capped by this number, and VPA cannot change it.
+  numPartitions: 1
+  # Kafka lives on the page cache, so its heap stays small.
+  #   UseG1GC:              ergonomics picks SerialGC below 2 CPUs or ~1792 MiB.
+  #   MaxRAMPercentage:     heap follows the container limit after a restart.
+  #   InitialRAMPercentage: resident memory starts low so VPA sees real demand.
+  #   G1PeriodicGCInterval: returns unused heap to the OS.
+  #   ActiveProcessorCount=2: pins JVM thread pools and GC threads to the VPA maxAllowed CPU "2".
+  heapOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=40 -XX:InitialRAMPercentage=10 -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=2"
+  # Starting values so the stack starts. Phase 1 replaces them with the floor.
+  resources:
+    requests: {cpu: 250m, memory: 1Gi}
+    limits: {memory: 1Gi}
+  resizePolicy:
+    - {resourceName: cpu, restartPolicy: NotRequired}
+    - {resourceName: memory, restartPolicy: RestartContainer}
+
+trapService:
+  # NodePort in the lab, LoadBalancer where the cluster provides one.
+  type: NodePort
+  nodePort: 30162
+
+vpa:
+  enabled: true
+  # minAllowed and maxAllowed are starting bounds. Phase 1 sets minAllowed to
+  # the measured floor; Phase 3 sets maxAllowed from the peak plus headroom.
+  # Keep each JVM's ActiveProcessorCount equal to its maxAllowed CPU.
+  components:
+    postgresql:
+      kind: StatefulSet
+      name: postgresql
+      container: postgresql
+      # shared_buffers needs a restart and a config change; apply by Helm upgrade.
+      updateMode: "Off"
+      minAllowed: {cpu: 100m, memory: 256Mi}
+      maxAllowed: {cpu: "2", memory: 4Gi}
+    kafka:
+      kind: StatefulSet
+      name: kafka
+      container: kafka
+      updateMode: InPlaceOrRecreate
+      minAllowed: {cpu: 100m, memory: 512Mi}
+      maxAllowed: {cpu: "2", memory: 4Gi}
+    core:
+      kind: StatefulSet
+      name: core
+      container: core
+      updateMode: InPlaceOrRecreate
+      # At 2Gi, 60 % heap (1229 MiB) + MaxMetaspaceSize 512 + ReservedCodeCacheSize 240
+      # leaves ~67 MiB for threads, GC structures and direct buffers.
+      # Idle working set measured 2051 MiB. Phase 1 revisits this value.
+      minAllowed: {cpu: 250m, memory: 3Gi}
+      maxAllowed: {cpu: "4", memory: 12Gi}
+    minion:
+      kind: StatefulSet
+      name: minion
+      container: minion
+      updateMode: InPlaceOrRecreate
+      minAllowed: {cpu: 100m, memory: 1Gi}
+      maxAllowed: {cpu: "2", memory: 4Gi}

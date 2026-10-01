@@ -1,0 +1,46 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+suite: vpa
+templates:
+  - templates/vpa.yaml
+release:
+  name: poc
+  namespace: poc
+tests:
+  - it: renders one VPA per component
+    asserts:
+      - hasDocuments: {count: 4}
+      - isKind: {of: "VerticalPodAutoscaler"}
+  - it: resizes Core in place, on a single replica, with limits scaled
+    documentSelector: {path: "metadata.name", value: "core"}
+    asserts:
+      - equal:
+          path: "spec.targetRef"
+          value:
+            apiVersion: "apps/v1"
+            kind: "StatefulSet"
+            name: "core"
+      - equal: {path: "spec.updatePolicy.updateMode", value: "InPlaceOrRecreate"}
+      - equal: {path: "spec.updatePolicy.minReplicas", value: 1}
+      - equal: {path: "spec.resourcePolicy.containerPolicies[0].containerName", value: "core"}
+      - equal: {path: "spec.resourcePolicy.containerPolicies[0].controlledValues", value: "RequestsAndLimits"}
+      - equal:
+          path: "spec.resourcePolicy.containerPolicies[1]"
+          value:
+            containerName: "*"
+            mode: "Off"
+  - it: only recommends for PostgreSQL
+    documentSelector: {path: "metadata.name", value: "postgresql"}
+    asserts:
+      - equal: {path: "spec.updatePolicy.updateMode", value: "Off"}
+  - it: renders nothing when disabled
+    set:
+      vpa.enabled: false
+    asserts:
+      - hasDocuments: {count: 0}
+  - it: rejects an unknown updateMode
+    set:
+      vpa.components.core.updateMode: Auto
+    asserts:
+      - failedTemplate:
+          errorPattern: 'vpa.components.core.updateMode "Auto" is not one of Off, Initial, Recreate, InPlaceOrRecreate'

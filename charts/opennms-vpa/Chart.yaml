@@ -1,0 +1,15 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: v2
+name: opennms-vpa
+description: Minimal OpenNMS trap-to-alarm stack with VerticalPodAutoscaler objects (proof of concept)
+type: application
+version: 0.1.0
+appVersion: "36.0.4"
+dependencies:
+  - name: core
+    version: 0.4.0
+    repository: file://../../vendor/opennms-helm-charts/charts/core
+  - name: minion
+    version: 0.4.0
+    repository: file://../../vendor/opennms-helm-charts/charts/minion

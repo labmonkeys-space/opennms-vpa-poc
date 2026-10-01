@@ -3,6 +3,24 @@ _bmad-output/
 _bmad/
 openspec/
 .claude/
+.superpowers/
 
-# Run data too large for git
-runs/**/raw/
+# IDE
+.idea/
+
+# Design docs, plans and run results stay local
+docs/
+runs/
+
+# Build and dependency output
+build/
+vendor/
+charts/opennms-vpa/charts/
+charts/opennms-vpa/Chart.lock
+
+# Local lab settings and state (real hosts and addresses)
+lab/lab.env
+lab/.state/
+
+# Terms blocked by make check-public; never committed
+.check-public-terms
