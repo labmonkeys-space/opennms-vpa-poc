@@ -46,9 +46,9 @@ status=0
 if git grep -n -i -E "$pattern"; then
   echo "check-public: forbidden content in tracked files" >&2; status=1
 fi
-# Only diff content lines: skip commit, index and @@ header lines, whose hashes
-# and line numbers can contain a digit run that looks like a VMID.
-if git log -p --all | grep -E '^[+-]([^+-]|$)' | grep -n -i -E "$pattern"; then
+# Only added and removed lines, minus the ---/+++ file headers. Commit, index and
+# @@ lines are skipped: their hashes and line numbers can look like a VMID.
+if git log -p --all | grep -E '^[+-]' | grep -v -E '^(\+\+\+|---) (a/|b/|/dev/null)' | grep -n -i -E "$pattern"; then
   echo "check-public: forbidden content in history" >&2; status=1
 fi
 if git log --all --format=%B | grep -n -i -E "$pattern"; then
