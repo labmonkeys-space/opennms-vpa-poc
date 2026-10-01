@@ -44,3 +44,35 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: 'vpa.components.core.updateMode "Auto" is not one of Off, Initial, Recreate, InPlaceOrRecreate'
+  - it: defaults controlledResources to cpu and memory
+    documentSelector: {path: metadata.name, value: core}
+    asserts:
+      - equal:
+          path: spec.resourcePolicy.containerPolicies[0].controlledResources
+          value: [cpu, memory]
+  - it: lets an arm restrict a component to cpu
+    documentSelector: {path: metadata.name, value: minion}
+    set:
+      vpa.components.minion.controlledResources: [cpu]
+    asserts:
+      - equal:
+          path: spec.resourcePolicy.containerPolicies[0].controlledResources
+          value: [cpu]
+  - it: pins the campaign maxAllowed bounds (uncapped Phase 3 peak x 1.5)
+    asserts:
+      - equal:
+          path: spec.resourcePolicy.containerPolicies[0].maxAllowed
+          value: {cpu: "8", memory: 6144Mi}
+        documentSelector: {path: metadata.name, value: core}
+      - equal:
+          path: spec.resourcePolicy.containerPolicies[0].maxAllowed
+          value: {cpu: "1", memory: 2304Mi}
+        documentSelector: {path: metadata.name, value: minion}
+      - equal:
+          path: spec.resourcePolicy.containerPolicies[0].maxAllowed
+          value: {cpu: 500m, memory: 1280Mi}
+        documentSelector: {path: metadata.name, value: kafka}
+      - equal:
+          path: spec.resourcePolicy.containerPolicies[0].maxAllowed
+          value: {cpu: "6", memory: 1024Mi}
+        documentSelector: {path: metadata.name, value: postgresql}

@@ -1,0 +1,10 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+#
+# Phase 1 only: chart JVM flags plus Native Memory Tracking, read with
+# jcmd <pid> VM.native_memory summary. tests/nmt-overlay_test.sh keeps this
+# file in sync with the chart defaults.
+core:
+  javaOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=25 -XX:MaxMetaspaceSize=512m -XX:ReservedCodeCacheSize=240m -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=8 -XX:NativeMemoryTracking=summary"
+minion:
+  javaOpts: "-XX:+UseG1GC -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=2 -XX:NativeMemoryTracking=summary"

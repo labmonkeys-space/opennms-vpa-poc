@@ -5,6 +5,7 @@ SHELL           := /bin/bash -o nounset -o pipefail -o errexit
 .DEFAULT_GOAL   := help
 HELM_CHARTS_DIR ?= ../opennms-helm-charts
 CHART           := charts/opennms-vpa
+EXTRA           ?=
 BUILD_DIR       := build
 
 .PHONY: help
@@ -15,6 +16,7 @@ help:
 	@echo "  lint          helm lint the umbrella"
 	@echo "  unittest      helm-unittest suites of the umbrella"
 	@echo "  test-scripts  shellcheck and run the shell tests"
+	@echo "  test-tools    Run Python tool tests"
 	@echo "  render        Render the umbrella and validate with kubeconform"
 	@echo "  check-public  Fail on content that must not be in this public repo"
 	@echo "  test          All of the above checks"
@@ -44,8 +46,12 @@ unittest: deps
 
 .PHONY: test-scripts
 test-scripts:
-	@for t in tests/*_test.sh lab/tests/*_test.sh; do [ -e "$$t" ] || continue; shellcheck -S warning "$$t" && bash "$$t"; done
-	@shellcheck -S warning scripts/*.sh $$(ls lab/scripts/*.sh lab/phase0/*.sh 2>/dev/null)
+	@for t in tests/*_test.sh lab/tests/*_test.sh; do [ -e "$$t" ] || continue; shellcheck -x -S warning "$$t" || exit 1; bash "$$t" || exit 1; done
+	@shellcheck -x -S warning scripts/*.sh $$(ls lab/scripts/*.sh lab/phase0/*.sh campaign/*.sh 2>/dev/null)
+
+.PHONY: test-tools
+test-tools:
+	python3 -m unittest discover -s tools/tests -v
 
 .PHONY: render
 render: deps
@@ -58,7 +64,7 @@ check-public:
 	scripts/check-public.sh
 
 .PHONY: test
-test: lint unittest test-scripts render check-public
+test: lint unittest test-scripts test-tools render check-public
 
 LAB_ENV   := lab/lab.env
 LAB_STATE := lab/.state
@@ -95,6 +101,10 @@ lab-down:
 lab-addons:
 	lab/scripts/cluster-addons.sh
 
+.PHONY: lab-sources
+lab-sources:
+	lab/scripts/source-pool.sh
+
 .PHONY: phase0-mechanism
 phase0-mechanism:
 	lab/phase0/resize-check.sh
@@ -103,7 +113,7 @@ KUBECONFIG_LAB := $(LAB_STATE)/kubeconfig
 
 .PHONY: deploy
 deploy: deps
-	KUBECONFIG=$(KUBECONFIG_LAB) helm upgrade --install poc $(CHART) --namespace poc --create-namespace --force-conflicts --wait --timeout 40m
+	KUBECONFIG=$(KUBECONFIG_LAB) helm upgrade --install poc $(CHART) --namespace poc --create-namespace --force-conflicts --reset-values --wait --timeout 40m $(EXTRA)
 
 .PHONY: undeploy
 undeploy:

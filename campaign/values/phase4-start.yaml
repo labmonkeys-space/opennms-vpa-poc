@@ -1,0 +1,33 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+#
+# Phase 4 start sizes: each component at its Phase 3 arm-B peak, rounded up to 256Mi.
+# Phase 3 (runs/phase3/20261001T140137Z-arm-b): core peaked near 4066212754 B (4352Mi),
+# minion at 1536Mi, kafka at 768Mi. At the practical floor Core OOMs on the 20,000-node
+# inventory, so Phase 4 starts above it. PostgreSQL stays at 768Mi, because 256Mi
+# crash-loops on the 20k database. Memory requests equal limits, no CPU limits.
+# Every VPA is Off: Phase 4 forces each resize itself.
+core:
+  resources:
+    requests: {cpu: "1", memory: 4352Mi}
+    limits: {memory: 4352Mi}
+minion:
+  resources:
+    requests: {cpu: 250m, memory: 1536Mi}
+    limits: {memory: 1536Mi}
+kafka:
+  resources:
+    requests: {cpu: 250m, memory: 768Mi}
+    limits: {memory: 768Mi}
+postgresql:
+  sharedBuffers: 128MB
+  maxConnections: 100
+  resources:
+    requests: {cpu: 250m, memory: 768Mi}
+    limits: {memory: 768Mi}
+vpa:
+  components:
+    core: {updateMode: "Off"}
+    minion: {updateMode: "Off"}
+    kafka: {updateMode: "Off"}
+    postgresql: {updateMode: "Off"}

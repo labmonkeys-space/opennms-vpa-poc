@@ -35,7 +35,7 @@ spec:
   resourcePolicy:
     containerPolicies:
       - containerName: {{ $c.container | quote }}
-        controlledResources: ["cpu", "memory"]
+        controlledResources: {{ toJson ($c.controlledResources | default (list "cpu" "memory")) }}
         controlledValues: RequestsAndLimits
         minAllowed: {{- toYaml $c.minAllowed | nindent 10 }}
         maxAllowed: {{- toYaml $c.maxAllowed | nindent 10 }}

@@ -28,7 +28,7 @@ tests:
     asserts:
       - matchRegex: {path: data.JAVA_OPTS, pattern: '-XX:\+UseG1GC'}
       - matchRegex: {path: data.JAVA_OPTS, pattern: '-XX:MaxRAMPercentage=\d+'}
-      - matchRegex: {path: data.JAVA_OPTS, pattern: '-XX:ActiveProcessorCount=\d+'}
+      - matchRegex: {path: data.JAVA_OPTS, pattern: '-XX:ActiveProcessorCount=8( |$)'}
       - notMatchRegex: {path: data.JAVA_OPTS, pattern: '-Xmx'}
   - it: runs the Minion with the cgroup heap wrapper and a resize policy
     template: charts/minion/templates/statefulset.yaml
