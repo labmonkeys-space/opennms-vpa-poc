@@ -141,7 +141,8 @@ while [[ "$quiet" -lt 3 && "$waited" -lt 1800 ]]; do
   if [[ "$cur" == "$prev" ]]; then quiet=$(( quiet + 1 )); else quiet=0; fi
   prev="$cur"; sleep 30; waited=$(( waited + 30 ))
 done
-log "alarm counter quiet after ${waited}s extra (counter $prev)"
+if [[ "$quiet" -ge 3 ]]; then log "alarm counter quiet after ${waited}s extra (counter $prev)"
+else log "alarm counter not quiet after ${waited}s (cap) (counter $prev)"; fi
 
 # 0 when core, minion and kafka cpu and memory targets each moved < 5 % over the last three samples.
 settled_check() { # <samples-file>
