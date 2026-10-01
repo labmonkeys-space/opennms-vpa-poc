@@ -54,6 +54,22 @@ ready=false
 kubectl -n "$ns" wait --for=condition=Ready "pod/$pod" --timeout=10s >/dev/null 2>&1 && ready=true
 ready_seconds=$(( $(date +%s) - start ))
 
+# VPA may have resized a neighbour in place before this rung set it Off.
+# Restart any other component whose running requests differ from its template.
+for other in postgresql kafka core minion; do
+  [[ "$other" == "$comp" ]] && continue
+  for res in cpu memory; do
+    want="$(kubectl -n "$ns" get sts "$other" -o jsonpath="{.spec.template.spec.containers[?(@.name==\"$other\")].resources.requests.$res}")"
+    have="$(kubectl -n "$ns" get pod "$other-0" -o jsonpath="{.status.containerStatuses[?(@.name==\"$other\")].resources.requests.$res}")"
+    if [[ "$want" != "$have" ]]; then
+      echo "neighbour $other-0 runs $res=$have, template says $want; restarting it" >> "$dir/rollout.txt"
+      kubectl -n "$ns" delete pod "$other-0" --wait=true >> "$dir/rollout.txt" 2>&1
+      kubectl -n "$ns" wait --for=condition=Ready "pod/$other-0" --timeout=1800s >> "$dir/rollout.txt" 2>&1 || true
+      break
+    fi
+  done
+done
+
 limit="$(kubectl -n "$ns" get pod "$pod" -o jsonpath="{.status.containerStatuses[?(@.name==\"$comp\")].resources.limits.memory}")"
 limit_verified=false
 [[ -n "$limit" && "$(to_bytes "$limit")" == "$(to_bytes "$mem")" ]] && limit_verified=true
