@@ -41,7 +41,7 @@ mkdir -p "$dir"
 # is unchanged would skip a cold start, so a rung restarts it when needed.
 started_before="$(kubectl -n "$ns" get pod "$pod" -o jsonpath="{.status.containerStatuses[?(@.name==\"$comp\")].state.running.startedAt}" 2>/dev/null || true)"
 start=$(date +%s)
-helm upgrade --install poc "$campaign_root/charts/opennms-vpa" -n "$ns" --force-conflicts \
+helm upgrade --install poc "$campaign_root/charts/opennms-vpa" -n "$ns" --force-conflicts --reset-values \
   -f "$campaign_root/campaign/values/nmt.yaml" "${sets[@]}" > "$dir/helm.txt"
 kubectl -n "$ns" rollout status "statefulset/$comp" --timeout="${ready_timeout}s" > "$dir/rollout.txt" 2>&1 || true
 started_after="$(kubectl -n "$ns" get pod "$pod" -o jsonpath="{.status.containerStatuses[?(@.name==\"$comp\")].state.running.startedAt}" 2>/dev/null || true)"

@@ -112,7 +112,7 @@ KUBECONFIG_LAB := $(LAB_STATE)/kubeconfig
 
 .PHONY: deploy
 deploy: deps
-	KUBECONFIG=$(KUBECONFIG_LAB) helm upgrade --install poc $(CHART) --namespace poc --create-namespace --force-conflicts --wait --timeout 40m
+	KUBECONFIG=$(KUBECONFIG_LAB) helm upgrade --install poc $(CHART) --namespace poc --create-namespace --force-conflicts --reset-values --wait --timeout 40m
 
 .PHONY: undeploy
 undeploy:
