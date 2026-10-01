@@ -1,8 +1,8 @@
 # Copyright 2026 Ronny Trommer <ronny@no42.org>
 # SPDX-License-Identifier: Apache-2.0
 #
-# Arm A: VPA resizes CPU in place only. Memory is applied from the VPA
-# recommendation with a Helm upgrade, so VPA never restarts a JVM.
+# Arm A: VPA resizes CPU in place only. Memory stays static.
+# A CPU-only VPA computes no memory recommendation.
 vpa:
   components:
     core: {controlledResources: [cpu]}
