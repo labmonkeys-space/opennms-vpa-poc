@@ -144,6 +144,9 @@ clean_pods start
 wait_quiet 1800
 log "pre-run counter quiet (hit cap $q_hit_cap)"
 snap1="$q_json"
+echo "$snap1" > "$dir/before.json"
+id_before="$(kget get pod "$pod" -o jsonpath='{.metadata.uid} {.metadata.creationTimestamp}' 2>/dev/null || true)"
+uid_before="${id_before%% *}"; created_before="${id_before#* }"
 restarts_before=""
 for c in "${all_comps[@]}"; do restarts_before+="$c=$(restarts_of "$c") "; done
 started_before="$(started_of "$comp")"
@@ -225,6 +228,9 @@ log "flood stopped after $(( flood_end - flood_t0 )) s"
 # ---- count once the counter is quiet ----------------------------------------
 wait_quiet "$quiet_cap"
 snap2="$q_json"
+echo "$snap2" > "$dir/after.json"
+id_after="$(kget get pod "$pod" -o jsonpath='{.metadata.uid} {.metadata.creationTimestamp}' 2>/dev/null || true)"
+uid_after="${id_after%% *}"; created_after="${id_after#* }"
 drain_seconds=$(( q_last_change - flood_end )); [[ "$drain_seconds" -lt 0 ]] && drain_seconds=0
 sent="$(awk '{s+=$2} END{print s+0}' "$sent_file")"
 flood_secs="$(awk '{s+=$3} END{print s+0}' "$sent_file")"
@@ -253,12 +259,14 @@ jq -n --arg mode "$mode" --arg comp "$comp" --argjson rs "$ready_seconds" --argj
   --argjson fs "$flood_secs" --argjson fw "$(( flood_end - flood_t0 ))" --argjson cf "${chunks_failed:-0}" \
   --argjson start "$start_mi" --argjson target "$target_mi" --arg limit "$final_limit" \
   --argjson restarted "$restarted" --argjson oom "$oom" --argjson ok "$passed" --arg failure "$failure" \
-  --arg rr "$resize_reason" --arg rb "$restarts_before" --arg ra "$restarts_after" \
+  --argjson base "$snap1" --argjson aft "$snap2" --arg ub "$uid_before" --arg cb "$created_before" --arg ua "$uid_after" --arg ca "$created_after" --arg rr "$resize_reason" --arg rb "$restarts_before" --arg ra "$restarts_after" \
   '{mode:$mode, component:$comp, ready_seconds:$rs, sent:$sent, counted:$counted, lost:($sent-$counted),
     udp_rcvbuf_errors_delta:$udp, udp_lower_bound:$ulb, drain_seconds:$drain, quiet_cap_hit:$cap,
     flood_seconds_sent:$fs, flood_wall_seconds:$fw, flood_chunks_failed:$cf,
     start_mi:$start, target_mi:$target, running_limit:$limit, container_restarted:$restarted,
     oom_killed_any:$oom, resize_condition:$rr, restarts_before:$rb, restarts_after:$ra,
+    uid_before:$ub, created_before:$cb, uid_after:$ua, created_after:$ca,
+    baseline:$base, after:$aft,
     passed:$ok, failure:$failure}' > "$dir/result.json"
 cat "$dir/result.json"
 
