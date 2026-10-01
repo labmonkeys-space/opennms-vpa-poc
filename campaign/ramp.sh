@@ -99,9 +99,16 @@ echo "step_rate,started,ended,settled,sent,counted,lost,udp_rcvbuf_errors_delta,
 echo "step_rate,chunks,flood_seconds,min_chunk_rate_ratio,generator_limited,settle_minutes" > "$dir/steps-detail.csv"
 
 log "arm $arm keys $keys sources $sources dir ${dir#"$campaign_root/"}"
-helm upgrade --install poc "$campaign_root/charts/opennms-vpa" -n "$ns" --force-conflicts --reset-values \
-  -f "$campaign_root/campaign/values/practical-floor.yaml" -f "$campaign_root/campaign/values/arm-$arm.yaml" --wait --timeout 40m > "$dir/helm-initial.txt" 2>&1 \
-  || die "initial helm upgrade failed, see $dir/helm-initial.txt"
+# A crash-looping pod from an earlier run makes helm --wait fail before the rollout replaces it. Retry once.
+deployed=false
+for try in 1 2 3; do
+  if helm upgrade --install poc "$campaign_root/charts/opennms-vpa" -n "$ns" --force-conflicts --reset-values \
+    -f "$campaign_root/campaign/values/practical-floor.yaml" -f "$campaign_root/campaign/values/arm-$arm.yaml" --wait --timeout 40m > "$dir/helm-initial-$try.txt" 2>&1; then
+    deployed=true; break
+  fi
+  log "initial helm upgrade failed (try $try), see helm-initial-$try.txt"
+done
+[[ "$deployed" == true ]] || die "initial helm upgrade failed three times"
 
 # Clean pods: VPA resizes survive helm upgrade. Restart any pod whose running requests differ from the template.
 : > "$dir/clean-pods.txt"
@@ -126,6 +133,15 @@ cat "$dir/clean-pods.txt" >> "$dir/ramp.log"
 
 log "waiting ${first_wait}s for the first VPA update"
 sleep "$first_wait"
+
+# Traps left in Kafka by an earlier run would be counted into step 1. Wait until the alarm counter stops moving.
+quiet=0; prev=""; waited=0
+while [[ "$quiet" -lt 3 && "$waited" -lt 1800 ]]; do
+  cur="$(counters | jq -r .linkdown_alarm_counter)"
+  if [[ "$cur" == "$prev" ]]; then quiet=$(( quiet + 1 )); else quiet=0; fi
+  prev="$cur"; sleep 30; waited=$(( waited + 30 ))
+done
+log "alarm counter quiet after ${waited}s extra (counter $prev)"
 
 # 0 when core, minion and kafka cpu and memory targets each moved < 5 % over the last three samples.
 settled_check() { # <samples-file>
