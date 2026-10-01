@@ -44,20 +44,23 @@ core:
     statsd: {enabled: false}
     telemetryd: {enabled: false}
     ticketer: {enabled: false}
-  # Replaces the image default -Xmx1024m. Starting values; Phase 1 derives the
-  # percentage and caps from the measured non-heap size.
+  # Replaces the image default -Xmx1024m.
   #   UseG1GC:                ergonomics picks SerialGC below 2 CPUs or ~1792 MiB.
-  #   MaxRAMPercentage=60:    heap follows the container limit after a restart.
+  #   MaxRAMPercentage=70:    heap follows the container limit after a restart.
+  #                           Phase 1: runs/phase1-memory/20260930T210800Z-core-1792Mi non-heap 530 MiB,
+  #                           floor((2304 - 530 x 1.2) / 2304 x 100) = 72, capped at 70.
   #   InitialRAMPercentage=25: resident memory starts low so VPA sees real demand.
   #   MaxMetaspaceSize, ReservedCodeCacheSize: bound non-heap so the percentage holds.
   #   G1PeriodicGCInterval:   returns unused heap to the OS.
   #   ActiveProcessorCount=4: without a CPU limit the JVM sizes pools to the node's
   #                           cores; pin to the VPA maxAllowed CPU instead.
-  javaOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=25 -XX:MaxMetaspaceSize=512m -XX:ReservedCodeCacheSize=240m -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=4"
-  # Starting values so the stack starts. Phase 1 replaces them with the floor.
+  javaOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=25 -XX:MaxMetaspaceSize=512m -XX:ReservedCodeCacheSize=240m -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=4"
+  # Phase 1: runs/phase1-memory/20260930T210800Z-core-1792Mi floor 1792Mi x 1.25 -> 2304Mi
+  # Phase 1: runs/phase1-cpu/20261001T041447Z-core-1 floor 1 CPU
+  # Requests equal minAllowed, memory limit equals the request, no CPU limit.
   resources:
-    requests: {cpu: "1", memory: 3Gi}
-    limits: {memory: 3Gi}
+    requests: {cpu: "1", memory: 2304Mi}
+    limits: {memory: 2304Mi}
   resizePolicy:
     - {resourceName: cpu, restartPolicy: NotRequired}
     - {resourceName: memory, restartPolicy: RestartContainer}
@@ -74,16 +77,19 @@ minion:
   # The image forces -Xmx; derive it from the memory limit at every start.
   heapFromCgroup:
     enabled: true
-    maxPercent: 60
+    # Phase 1: runs/phase1-memory/20260930T215554Z-minion-768Mi non-heap 269 MiB,
+    # floor((1024 - 269 x 1.2) / 1024 x 100) = 68.
+    maxPercent: 68
     minPercent: 25
   #   UseG1GC, G1PeriodicGCInterval: as for Core.
   #   ActiveProcessorCount=2: sizes trapd.threads (default cores*2) and GC threads
   #                           to the VPA maxAllowed CPU, not the node.
   javaOpts: "-XX:+UseG1GC -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=2"
-  # Starting values so the stack starts. Phase 1 replaces them with the floor.
+  # Phase 1: runs/phase1-memory/20260930T215554Z-minion-768Mi floor 768Mi x 1.25 -> 1024Mi
+  # Phase 1: runs/phase1-cpu/20261001T060837Z-minion-100m lowest tested 100m
   resources:
-    requests: {cpu: 500m, memory: 1536Mi}
-    limits: {memory: 1536Mi}
+    requests: {cpu: 100m, memory: 1024Mi}
+    limits: {memory: 1024Mi}
   resizePolicy:
     - {resourceName: cpu, restartPolicy: NotRequired}
     - {resourceName: memory, restartPolicy: RestartContainer}
@@ -99,10 +105,11 @@ postgresql:
   # Every backend costs memory. Must cover Core's JDBC pool (default 50) plus
   # the installer and admin sessions.
   maxConnections: 100
-  # Starting values so the stack starts. Phase 1 replaces them with the floor.
+  # Phase 1: runs/phase1-memory/20261001T015250Z-postgresql-128Mi lowest tested 128Mi x 1.25 -> 256Mi
+  # Phase 1: runs/phase1-cpu/20261001T074545Z-postgresql-100m lowest tested 100m
   resources:
-    requests: {cpu: 250m, memory: 512Mi}
-    limits: {memory: 512Mi}
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 256Mi}
 
 kafka:
   image: apache/kafka:3.9.1
@@ -122,10 +129,11 @@ kafka:
   #   G1PeriodicGCInterval: returns unused heap to the OS.
   #   ActiveProcessorCount=2: pins JVM thread pools and GC threads to the VPA maxAllowed CPU "2".
   heapOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=40 -XX:InitialRAMPercentage=10 -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=2"
-  # Starting values so the stack starts. Phase 1 replaces them with the floor.
+  # Phase 1: runs/phase1-memory/20261001T022905Z-kafka-512Mi floor 512Mi x 1.25 -> 768Mi
+  # Phase 1: runs/phase1-cpu/20261001T071124Z-kafka-100m lowest tested 100m
   resources:
-    requests: {cpu: 250m, memory: 1Gi}
-    limits: {memory: 1Gi}
+    requests: {cpu: 100m, memory: 768Mi}
+    limits: {memory: 768Mi}
   resizePolicy:
     - {resourceName: cpu, restartPolicy: NotRequired}
     - {resourceName: memory, restartPolicy: RestartContainer}
@@ -150,6 +158,8 @@ vpa:
       container: postgresql
       # shared_buffers needs a restart and a config change; apply by Helm upgrade.
       updateMode: "Off"
+      # Phase 1: runs/phase1-memory/20261001T015250Z-postgresql-128Mi 128Mi x 1.25 -> 256Mi;
+      # runs/phase1-cpu/20261001T074545Z-postgresql-100m 100m.
       minAllowed: {cpu: 100m, memory: 256Mi}
       maxAllowed: {cpu: "2", memory: 4Gi}
     kafka:
@@ -157,22 +167,25 @@ vpa:
       name: kafka
       container: kafka
       updateMode: InPlaceOrRecreate
-      minAllowed: {cpu: 100m, memory: 512Mi}
+      # Phase 1: runs/phase1-memory/20261001T022905Z-kafka-512Mi 512Mi x 1.25 -> 768Mi;
+      # runs/phase1-cpu/20261001T071124Z-kafka-100m 100m.
+      minAllowed: {cpu: 100m, memory: 768Mi}
       maxAllowed: {cpu: "2", memory: 4Gi}
     core:
       kind: StatefulSet
       name: core
       container: core
       updateMode: InPlaceOrRecreate
-      # At 2Gi, 60 % heap (1229 MiB) + MaxMetaspaceSize 512 + ReservedCodeCacheSize 240
-      # leaves ~67 MiB for threads, GC structures and direct buffers.
-      # Idle working set measured 2051 MiB. Phase 1 revisits this value.
-      minAllowed: {cpu: 250m, memory: 3Gi}
+      # Phase 1: runs/phase1-memory/20260930T210800Z-core-1792Mi 1792Mi x 1.25 -> 2304Mi;
+      # runs/phase1-cpu/20261001T041447Z-core-1 1 CPU.
+      minAllowed: {cpu: "1", memory: 2304Mi}
       maxAllowed: {cpu: "4", memory: 12Gi}
     minion:
       kind: StatefulSet
       name: minion
       container: minion
       updateMode: InPlaceOrRecreate
-      minAllowed: {cpu: 100m, memory: 1Gi}
+      # Phase 1: runs/phase1-memory/20260930T215554Z-minion-768Mi 768Mi x 1.25 -> 1024Mi;
+      # runs/phase1-cpu/20261001T060837Z-minion-100m 100m.
+      minAllowed: {cpu: 100m, memory: 1024Mi}
       maxAllowed: {cpu: "2", memory: 4Gi}
