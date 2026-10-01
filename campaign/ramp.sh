@@ -6,8 +6,9 @@
 # Phase 3 trap ramp: 10, 100, 500, 1000, 2000 traps/s at 200 sources.
 # Each step floods in 300 s chunks until the core, minion and kafka VPA
 # targets (cpu and memory) each moved less than 5 % across the last three
-# 5-minute checks, or 45 minutes passed. Writes <dir>/steps.csv and, for arm A,
-# <dir>/memory-upgrades.csv.
+# 5-minute checks and all four pods stayed Ready without a restart, or 45 minutes
+# passed. Both arms start from campaign/values/practical-floor.yaml. Arm A keeps
+# memory static. Writes <dir>/steps.csv.
 # Run campaign/reset-recommender.sh and campaign/manifest.sh first.
 set -euo pipefail
 # shellcheck source=campaign/lib.sh
@@ -18,7 +19,6 @@ mkdir -p "$dir"
 rates="${RAMP_RATES:-10 100 500 1000 2000}"
 chunk="${RAMP_CHUNK:-300}"
 max_step="${RAMP_MAX_STEP:-2700}"
-upgrade_pct="${RAMP_UPGRADE_PCT:-10}"
 drain="${RAMP_DRAIN:-120}"
 first_wait="${RAMP_FIRST_WAIT:-600}"
 sources=200
@@ -95,13 +95,12 @@ counters() { # retry: Minion or Postgres may be restarting
 "$campaign_root/campaign/poller.sh" start "$dir" | tee -a "$dir/ramp.log"
 trap '"$campaign_root/campaign/poller.sh" stop >/dev/null' EXIT
 
-echo "step_rate,started,ended,settled,sent,counted,lost,udp_rcvbuf_errors_delta,restarts_core,restarts_minion,restarts_kafka" > "$dir/steps.csv"
+echo "step_rate,started,ended,settled,sent,counted,lost,udp_rcvbuf_errors_delta,restarts_core,restarts_minion,restarts_kafka,restarts_postgresql,oom_core,oom_minion,oom_kafka,oom_postgresql" > "$dir/steps.csv"
 echo "step_rate,chunks,flood_seconds,min_chunk_rate_ratio,generator_limited,settle_minutes" > "$dir/steps-detail.csv"
-[[ "$arm" == a ]] && echo "ts,before_step,component,running_request,target,applied,restarts_added" > "$dir/memory-upgrades.csv"
 
 log "arm $arm keys $keys sources $sources dir ${dir#"$campaign_root/"}"
 helm upgrade --install poc "$campaign_root/charts/opennms-vpa" -n "$ns" --force-conflicts --reset-values \
-  -f "$campaign_root/campaign/values/arm-$arm.yaml" --wait --timeout 40m > "$dir/helm-initial.txt" 2>&1 \
+  -f "$campaign_root/campaign/values/practical-floor.yaml" -f "$campaign_root/campaign/values/arm-$arm.yaml" --wait --timeout 40m > "$dir/helm-initial.txt" 2>&1 \
   || die "initial helm upgrade failed, see $dir/helm-initial.txt"
 
 # Clean pods: VPA resizes survive helm upgrade. Restart any pod whose running requests differ from the template.
@@ -128,48 +127,6 @@ cat "$dir/clean-pods.txt" >> "$dir/ramp.log"
 log "waiting ${first_wait}s for the first VPA update"
 sleep "$first_wait"
 
-mem_sets=()   # arm A: accumulated --set memory arguments
-extra_core=0; extra_minion=0; extra_kafka=0
-
-# Arm A: apply the VPA memory target by helm upgrade when it differs by more than 10 %.
-# Each change is one "comp|newMi|runningBefore|startedBefore" entry (bash 3.2 has no associative arrays).
-apply_memory_targets() { # <step_rate>
-  local step="$1" c tgt run tb rb diff new_mi e t0
-  local changes=()
-  for c in "${comps[@]}"; do
-    tgt="$(vpa_target "$c" memory)"; run="$(running "$c" memory)"
-    [[ -z "$tgt" || -z "$run" ]] && continue
-    tb="$(to_bytes "$tgt")"; rb="$(to_bytes "$run")"
-    [[ "$rb" -gt 0 ]] || continue
-    diff=$(( tb > rb ? tb - rb : rb - tb ))
-    if [[ $(( diff * 100 )) -gt $(( rb * upgrade_pct )) ]]; then
-      new_mi=$(( (tb + 1048575) / 1048576 ))
-      changes+=("$c|${new_mi}Mi|$run|$(kget get pod "$c-0" -o jsonpath="{.status.containerStatuses[?(@.name==\"$c\")].state.running.startedAt}" 2>/dev/null || true)")
-      mem_sets+=(--set "$c.resources.requests.memory=${new_mi}Mi" --set "$c.resources.limits.memory=${new_mi}Mi")
-    fi
-  done
-  if [[ ${#changes[@]} -eq 0 ]]; then
-    log "arm A: no memory target differs by more than 10 % before step $step"
-    return 0
-  fi
-  t0=$(date +%s)
-  log "arm A: helm upgrade before step $step: ${changes[*]}"
-  helm upgrade --install poc "$campaign_root/charts/opennms-vpa" -n "$ns" --force-conflicts --reset-values \
-    -f "$campaign_root/campaign/values/arm-a.yaml" "${mem_sets[@]}" --wait --timeout 40m >> "$dir/helm-upgrades.txt" 2>&1 \
-    || log "arm A: helm upgrade failed or timed out, see helm-upgrades.txt"
-  for e in "${changes[@]}"; do
-    IFS='|' read -r c new_mi run started_b <<<"$e"
-    kget wait --for=condition=Ready "pod/$c-0" --timeout=1800s >/dev/null 2>&1 || log "$c-0 not Ready after upgrade"
-    # A recreated pod restarts its restartCount at 0, so count the recreation as one restart.
-    local after added=0
-    after="$(kget get pod "$c-0" -o jsonpath="{.status.containerStatuses[?(@.name==\"$c\")].state.running.startedAt}" 2>/dev/null || true)"
-    [[ "$started_b" != "$after" ]] && added=1
-    case "$c" in core) extra_core=$(( extra_core + added )) ;; minion) extra_minion=$(( extra_minion + added )) ;; kafka) extra_kafka=$(( extra_kafka + added )) ;; esac
-    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ),$step,$c,$run,$(vpa_target "$c" memory),$new_mi,$added" >> "$dir/memory-upgrades.csv"
-  done
-  log "arm A: upgrade took $(( $(date +%s) - t0 )) s"
-}
-
 # 0 when core, minion and kafka cpu and memory targets each moved < 5 % over the last three samples.
 settled_check() { # <samples-file>
   [[ "$(wc -l < "$1")" -ge 3 ]] || return 1
@@ -183,19 +140,45 @@ sample_targets() {
   for c in "${comps[@]}"; do
     local cpu mem
     cpu="$(vpa_target "$c" cpu)"; mem="$(vpa_target "$c" memory)"
-    line+="$( [[ -n "$cpu" ]] && to_milli "$cpu" || echo x ) $( [[ -n "$mem" ]] && to_bytes "$mem" || echo x ) "
+    line+="$( [[ -n "$cpu" ]] && to_milli "$cpu" || echo x ) "
+    # Arm A's cpu-only VPA computes no memory target, so memory is not part of its settle check.
+    [[ "$arm" == a ]] || line+="$( [[ -n "$mem" ]] && to_bytes "$mem" || echo x ) "
   done
   echo "$line"
 }
 
-first=true
+# "<all-ready 0|1> <restart total over the four pods>"
+health_line() {
+  local c ready=1 total=0 st
+  for c in "${all_comps[@]}"; do
+    st="$(kget get pod "$c-0" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+    [[ "$st" == True ]] || ready=0
+    total=$(( total + $(restarts_of "$c") ))
+  done
+  echo "$ready $total"
+}
+# Settled needs the last three checks all Ready and no restart since the check before them.
+health_ok() { # <health-file>: first line is the step baseline
+  [[ "$(wc -l < "$1")" -ge 4 ]] || return 1
+  tail -4 "$1" | awk 'NR==1{t=$2} NR>1{ if ($1!=1 || $2!=t) bad=1 } END{exit bad}'
+}
+# Flag a component whose last restart was an OOMKill and whose count rose in this step.
+note_ooms() {
+  local c reason now base
+  for c in "${all_comps[@]}"; do
+    reason="$(kget get pod "$c-0" -o jsonpath="{.status.containerStatuses[?(@.name==\"$c\")].lastState.terminated.reason}" 2>/dev/null || true)"
+    now="$(restarts_of "$c")"
+    case "$c" in core) base=$base_core ;; minion) base=$base_minion ;; kafka) base=$base_kafka ;; *) base=$base_pg ;; esac
+    if [[ "$reason" == OOMKilled && "$now" -gt "$base" ]]; then eval "oom_$c=true"; fi
+  done
+}
+
 for rate in $rates; do
-  if [[ "$arm" == a && "$first" != true ]]; then apply_memory_targets "$rate"; fi
-  first=false
   log "step $rate traps/s"
   snap1="$(counters)"
-  base_core="$(restarts_of core)"; base_minion="$(restarts_of minion)"; base_kafka="$(restarts_of kafka)"
-  ec0=$extra_core; em0=$extra_minion; ek0=$extra_kafka
+  base_core="$(restarts_of core)"; base_minion="$(restarts_of minion)"; base_kafka="$(restarts_of kafka)"; base_pg="$(restarts_of postgresql)"
+  oom_core=false; oom_minion=false; oom_kafka=false; oom_postgresql=false
+  health="$dir/health-$rate.txt"; echo "$(health_line)" > "$health"
   started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   samples="$dir/targets-$rate.txt"; : > "$samples"
   step_t0=$(date +%s); n=0; sent_total=0; flood_secs=0; settled=false; min_ratio=""; settle_min=""
@@ -212,7 +195,9 @@ for rate in $rates; do
     ratio="$(awk -v r="${r:-0}" -v q="$rate" 'BEGIN{printf "%.3f", r/q}')"
     if [[ -z "$min_ratio" ]] || awk -v a="$ratio" -v b="$min_ratio" 'BEGIN{exit !(a<b)}'; then min_ratio="$ratio"; fi
     sample_targets >> "$samples"
-    if settled_check "$samples"; then settled=true; settle_min=$(( ($(date +%s) - step_t0) / 60 )); break; fi
+    health_line >> "$health"
+    note_ooms
+    if settled_check "$samples" && health_ok "$health"; then settled=true; settle_min=$(( ($(date +%s) - step_t0) / 60 )); break; fi
     [[ $(( $(date +%s) - step_t0 )) -ge $max_step ]] && break
   done
   log "step $rate: $n chunks, sent $sent_total, settled $settled"
@@ -225,10 +210,12 @@ for rate in $rates; do
     log "Minion UDP counters reset during step $rate (pod restarted); using the post-restart value as a lower bound"
     udp="$(jq -n --argjson b "$snap2" '$b.minion_udp.RcvbufErrors')"
   fi
-  rc=$(( $(restarts_of core) - base_core + extra_core - ec0 ))
-  rm_=$(( $(restarts_of minion) - base_minion + extra_minion - em0 ))
-  rk=$(( $(restarts_of kafka) - base_kafka + extra_kafka - ek0 ))
-  echo "$rate,$started,$ended,$settled,$sent_total,$counted,$(( sent_total - counted )),$udp,$rc,$rm_,$rk" >> "$dir/steps.csv"
+  note_ooms
+  rc=$(( $(restarts_of core) - base_core ))
+  rm_=$(( $(restarts_of minion) - base_minion ))
+  rk=$(( $(restarts_of kafka) - base_kafka ))
+  rp=$(( $(restarts_of postgresql) - base_pg ))
+  echo "$rate,$started,$ended,$settled,$sent_total,$counted,$(( sent_total - counted )),$udp,$rc,$rm_,$rk,$rp,$oom_core,$oom_minion,$oom_kafka,$oom_postgresql" >> "$dir/steps.csv"
   glim=false; awk -v a="$min_ratio" 'BEGIN{exit !(a<0.95)}' && glim=true
   echo "$rate,$n,$flood_secs,$min_ratio,$glim,$settle_min" >> "$dir/steps-detail.csv"
 done

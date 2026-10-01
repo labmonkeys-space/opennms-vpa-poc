@@ -1,0 +1,32 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: Apache-2.0
+#
+# Practical floor: the common starting size of both arms in Phase 3.
+# The Phase 1 idle floors are too small under load. The first Phase 3 run
+# (runs/phase3/20261001T121055Z-arm-b-INVALID) OOMKilled PostgreSQL at 256Mi
+# during a 20,000-node trap ramp. Memory requests equal limits, no CPU limits.
+# minAllowed equals the start size, so arm B's VPA cannot shrink below it.
+core:
+  resources:
+    requests: {cpu: "1", memory: 2560Mi}
+    limits: {memory: 2560Mi}
+minion:
+  resources:
+    requests: {cpu: 250m, memory: 1536Mi}
+    limits: {memory: 1536Mi}
+kafka:
+  resources:
+    requests: {cpu: 250m, memory: 768Mi}
+    limits: {memory: 768Mi}
+postgresql:
+  sharedBuffers: 128MB
+  maxConnections: 100
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {memory: 512Mi}
+vpa:
+  components:
+    core: {minAllowed: {cpu: "1", memory: 2560Mi}}
+    minion: {minAllowed: {cpu: 250m, memory: 1536Mi}}
+    kafka: {minAllowed: {cpu: 250m, memory: 768Mi}}
+    postgresql: {minAllowed: {cpu: 250m, memory: 512Mi}}
