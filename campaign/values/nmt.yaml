@@ -5,6 +5,6 @@
 # jcmd <pid> VM.native_memory summary. tests/nmt-overlay_test.sh keeps this
 # file in sync with the chart defaults.
 core:
-  javaOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=25 -XX:MaxMetaspaceSize=512m -XX:ReservedCodeCacheSize=240m -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=4 -XX:NativeMemoryTracking=summary"
+  javaOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=25 -XX:MaxMetaspaceSize=512m -XX:ReservedCodeCacheSize=240m -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=6 -XX:NativeMemoryTracking=summary"
 minion:
   javaOpts: "-XX:+UseG1GC -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=2 -XX:NativeMemoryTracking=summary"

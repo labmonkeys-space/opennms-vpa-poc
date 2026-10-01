@@ -52,15 +52,19 @@ core:
   #   InitialRAMPercentage=25: resident memory starts low so VPA sees real demand.
   #   MaxMetaspaceSize, ReservedCodeCacheSize: bound non-heap so the percentage holds.
   #   G1PeriodicGCInterval:   returns unused heap to the OS.
-  #   ActiveProcessorCount=4: without a CPU limit the JVM sizes pools to the node's
+  #   ActiveProcessorCount=6: without a CPU limit the JVM sizes pools to the node's
   #                           cores; pin to the VPA maxAllowed CPU instead.
-  javaOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=25 -XX:MaxMetaspaceSize=512m -XX:ReservedCodeCacheSize=240m -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=4"
+  #                           runs/phase3 peak core target 4000m was capped, so 6 (4000m x 1.5) is a lower bound.
+  javaOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=25 -XX:MaxMetaspaceSize=512m -XX:ReservedCodeCacheSize=240m -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=6"
   # Phase 1: runs/phase1-memory/20260930T210800Z-core-1792Mi floor 1792Mi x 1.25 -> 2304Mi
   # Phase 1: runs/phase1-cpu/20261001T041447Z-core-1 floor 1 CPU
+  # runs/phase2: the 20,000-node import OOMKilled Core at 2304Mi with VPA Off.
+  # runs/phase3: arm A OOMKilled Core at 2560Mi in step 10 (static memory); arm B started
+  # here and reached a 4082Mi target. 2560Mi is the practical floor.
   # Requests equal minAllowed, memory limit equals the request, no CPU limit.
   resources:
-    requests: {cpu: "1", memory: 2304Mi}
-    limits: {memory: 2304Mi}
+    requests: {cpu: "1", memory: 2560Mi}
+    limits: {memory: 2560Mi}
   resizePolicy:
     - {resourceName: cpu, restartPolicy: NotRequired}
     - {resourceName: memory, restartPolicy: RestartContainer}
@@ -87,9 +91,10 @@ minion:
   javaOpts: "-XX:+UseG1GC -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=2"
   # Phase 1: runs/phase1-memory/20260930T215554Z-minion-768Mi floor 768Mi x 1.25 -> 1024Mi
   # Phase 1: runs/phase1-cpu/20261001T060837Z-minion-100m lowest tested 100m
+  # runs/phase3: peak target 511m / 1536Mi under 4.9 million traps. Start there.
   resources:
-    requests: {cpu: 100m, memory: 1024Mi}
-    limits: {memory: 1024Mi}
+    requests: {cpu: 250m, memory: 1536Mi}
+    limits: {memory: 1536Mi}
   resizePolicy:
     - {resourceName: cpu, restartPolicy: NotRequired}
     - {resourceName: memory, restartPolicy: RestartContainer}
@@ -107,9 +112,11 @@ postgresql:
   maxConnections: 100
   # Phase 1: runs/phase1-memory/20261001T015250Z-postgresql-128Mi lowest tested 128Mi x 1.25 -> 256Mi
   # Phase 1: runs/phase1-cpu/20261001T074545Z-postgresql-100m lowest tested 100m
+  # runs/phase3: peak target 2000m (capped) / 561Mi, 482 MiB observed at 20,000 nodes.
+  # Memory is static (VPA Off), so the default must cover that peak: 768Mi.
   resources:
-    requests: {cpu: 100m, memory: 256Mi}
-    limits: {memory: 256Mi}
+    requests: {cpu: 250m, memory: 768Mi}
+    limits: {memory: 768Mi}
 
 kafka:
   image: apache/kafka:3.9.1
@@ -131,8 +138,9 @@ kafka:
   heapOpts: "-XX:+UseG1GC -XX:MaxRAMPercentage=40 -XX:InitialRAMPercentage=10 -XX:G1PeriodicGCInterval=60000 -XX:ActiveProcessorCount=2"
   # Phase 1: runs/phase1-memory/20261001T022905Z-kafka-512Mi floor 512Mi x 1.25 -> 768Mi
   # Phase 1: runs/phase1-cpu/20261001T071124Z-kafka-100m lowest tested 100m
+  # runs/phase3: peak target 250m / 768Mi. CPU raised from 100m to 250m.
   resources:
-    requests: {cpu: 100m, memory: 768Mi}
+    requests: {cpu: 250m, memory: 768Mi}
     limits: {memory: 768Mi}
   resizePolicy:
     - {resourceName: cpu, restartPolicy: NotRequired}
@@ -145,11 +153,12 @@ trapService:
 
 vpa:
   enabled: true
-  # minAllowed and maxAllowed are starting bounds. Phase 1 sets minAllowed to
-  # the measured floor; Phase 3 sets maxAllowed from the peak plus headroom.
-  # Keep each JVM's ActiveProcessorCount equal to its maxAllowed CPU.
+  # minAllowed equals the chart resources (the practical floor, Phase 1 and 3).
+  # maxAllowed is the runs/phase3 peak target x 1.5, rounded up to 256Mi for memory
+  # and 500m for CPU. Keep each JVM's ActiveProcessorCount at its maxAllowed CPU.
   components:
-    # Each component may set controlledResources. Default [cpu, memory] (arm B).
+    # Each component may set controlledResources. Default [cpu, memory] (arm B, recommended:
+    # runs/phase3 arm B lost 735 of 4,908,000 traps, arm A OOMKilled Core).
     # campaign/values/arm-a.yaml restricts core, minion and kafka to [cpu]:
     # CPU changes in place, memory follows the recommendation by Helm upgrade.
     postgresql:
@@ -158,10 +167,11 @@ vpa:
       container: postgresql
       # shared_buffers needs a restart and a config change; apply by Helm upgrade.
       updateMode: "Off"
-      # Phase 1: runs/phase1-memory/20261001T015250Z-postgresql-128Mi 128Mi x 1.25 -> 256Mi;
-      # runs/phase1-cpu/20261001T074545Z-postgresql-100m 100m.
-      minAllowed: {cpu: 100m, memory: 256Mi}
-      maxAllowed: {cpu: "2", memory: 4Gi}
+      # Phase 1: runs/phase1-memory/20261001T015250Z-postgresql-128Mi, runs/phase1-cpu/20261001T074545Z-postgresql-100m.
+      # Same values as the chart resources (see postgresql.resources).
+      minAllowed: {cpu: 250m, memory: 768Mi}
+      # runs/phase3 peak 2000m (capped, so a lower bound) / 561Mi; x 1.5 -> 3 CPU / 842 -> 1024Mi.
+      maxAllowed: {cpu: "3", memory: 1024Mi}
     kafka:
       kind: StatefulSet
       name: kafka
@@ -169,8 +179,9 @@ vpa:
       updateMode: InPlaceOrRecreate
       # Phase 1: runs/phase1-memory/20261001T022905Z-kafka-512Mi 512Mi x 1.25 -> 768Mi;
       # runs/phase1-cpu/20261001T071124Z-kafka-100m 100m.
-      minAllowed: {cpu: 100m, memory: 768Mi}
-      maxAllowed: {cpu: "2", memory: 4Gi}
+      minAllowed: {cpu: 250m, memory: 768Mi}
+      # runs/phase3 peak 250m / 768Mi; x 1.5 -> 375m -> 500m, 1152 -> 1280Mi.
+      maxAllowed: {cpu: 500m, memory: 1280Mi}
     core:
       kind: StatefulSet
       name: core
@@ -178,8 +189,11 @@ vpa:
       updateMode: InPlaceOrRecreate
       # Phase 1: runs/phase1-memory/20260930T210800Z-core-1792Mi 1792Mi x 1.25 -> 2304Mi;
       # runs/phase1-cpu/20261001T041447Z-core-1 1 CPU.
-      minAllowed: {cpu: "1", memory: 2304Mi}
-      maxAllowed: {cpu: "4", memory: 12Gi}
+      # Same values as the chart resources (runs/phase3: 2560Mi is the practical floor).
+      minAllowed: {cpu: "1", memory: 2560Mi}
+      # runs/phase3 peak 4000m (capped at the old maxAllowed, so a lower bound) / 4082Mi;
+      # x 1.5 -> 6 CPU, 6123 -> 6144Mi.
+      maxAllowed: {cpu: "6", memory: 6144Mi}
     minion:
       kind: StatefulSet
       name: minion
@@ -187,5 +201,6 @@ vpa:
       updateMode: InPlaceOrRecreate
       # Phase 1: runs/phase1-memory/20260930T215554Z-minion-768Mi 768Mi x 1.25 -> 1024Mi;
       # runs/phase1-cpu/20261001T060837Z-minion-100m 100m.
-      minAllowed: {cpu: 100m, memory: 1024Mi}
-      maxAllowed: {cpu: "2", memory: 4Gi}
+      minAllowed: {cpu: 250m, memory: 1536Mi}
+      # runs/phase3 peak 511m / 1536Mi; x 1.5 -> 767m -> 1 CPU, 2304Mi.
+      maxAllowed: {cpu: "1", memory: 2304Mi}
