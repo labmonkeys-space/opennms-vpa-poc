@@ -5,6 +5,7 @@
 # Put the trap source pool on the load generator and route it back from the
 # k8s node, so traps from pool addresses pass reverse-path filtering.
 # Idempotent: addresses and the route use replace. Not persistent across reboots.
+# Assumes a /24 pool and SOURCE_COUNT <= 254.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"

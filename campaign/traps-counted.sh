@@ -5,6 +5,8 @@
 # Print delivered-trap counters as one JSON object. Runs use the delta of
 # linkdown_alarm_counter between two snapshots; the event count is reported
 # too, because event rows can be removed by alarm auto-clean.
+# The alarm-counter delta is net of Kafka redelivery after a Core kill, so lost can be
+# negative and can hide loss.
 set -euo pipefail
 # shellcheck source=campaign/lib.sh
 source "$(dirname "$0")/lib.sh"

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # load-inventory.sh <nodes> <sources> <dir>
+# The inventory only grows: an empty-requisition import does not delete nodes on 36.0.4.
 set -euo pipefail
 # shellcheck source=campaign/lib.sh
 source "$(dirname "$0")/lib.sh"

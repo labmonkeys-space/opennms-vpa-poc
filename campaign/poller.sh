@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # poller.sh start <dir> | stop
-# Samples pod usage, resources, restarts and VPA bounds every 15 s into CSV.
+# Samples pod usage, resources, restarts, VPA bounds and uncapped targets every 15 s into CSV.
 set -euo pipefail
 # shellcheck source=campaign/lib.sh
 source "$(dirname "$0")/lib.sh"
@@ -31,7 +31,8 @@ sample() {
     .items[] | . as $v | (.status.recommendation.containerRecommendations // [] | .[0]) as $r |
     [$ts, $v.metadata.name, ($r.target.cpu // ""), ($r.target.memory // ""),
      ($r.lowerBound.cpu // ""), ($r.lowerBound.memory // ""),
-     ($r.upperBound.cpu // ""), ($r.upperBound.memory // "")] | @csv' <<<"$vpas" >> "$dir/vpa.csv"
+     ($r.upperBound.cpu // ""), ($r.upperBound.memory // ""),
+     ($r.uncappedTarget.cpu // ""), ($r.uncappedTarget.memory // "")] | @csv' <<<"$vpas" >> "$dir/vpa.csv"
 }
 
 case "${1:-}" in
@@ -42,7 +43,7 @@ case "${1:-}" in
     fi
     mkdir -p "$dir"
     echo "ts,pod,container,cpu_usage,mem_usage,req_cpu,req_mem,lim_cpu,lim_mem,restarts,last_reason" > "$dir/pods.csv"
-    echo "ts,vpa,target_cpu,target_mem,lower_cpu,lower_mem,upper_cpu,upper_mem" > "$dir/vpa.csv"
+    echo "ts,vpa,target_cpu,target_mem,lower_cpu,lower_mem,upper_cpu,upper_mem,uncapped_cpu,uncapped_mem" > "$dir/vpa.csv"
     ( while true; do
         { sample "$dir" 2>&1 >/dev/null || true; } | while IFS= read -r line; do
           printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$line" >> "$dir/poller.log"

@@ -9,7 +9,16 @@
 # 5-minute checks and all four pods stayed Ready without a restart, or 45 minutes
 # passed. Both arms start from campaign/values/practical-floor.yaml. Arm A keeps
 # memory static. Writes <dir>/steps.csv.
-# Run campaign/reset-recommender.sh and campaign/manifest.sh first.
+# Run campaign/reset-recommender.sh first. ramp.sh deploys the chart itself, so
+# run campaign/manifest.sh after ramp.sh has deployed (or after it finishes) to record
+# the deployed state.
+# RAMP_KEYS sets the alarm keys per source. Unset, it is 100 when the latest
+# runs/precheck summary reports alarms_per_source >= 20, 1 below that, and 100 when
+# no precheck summary exists.
+# The alarm-counter delta is net of Kafka redelivery after a Core kill, so lost can be
+# negative and can hide loss.
+# Per-step lost at 1000 and 2000 traps/s is the cumulative backlog when Core lags.
+# The quiet test can pass while a restarted Core consumer has not rejoined.
 set -euo pipefail
 # shellcheck source=campaign/lib.sh
 source "$(dirname "$0")/lib.sh"
@@ -31,8 +40,9 @@ precheck="$(ls -d "$campaign_root"/runs/precheck/*/ 2>/dev/null | tail -1)"
 aps="$(sed -n 's/^alarms_per_source: *//p' "${precheck}summary.md" 2>/dev/null | head -1)"
 keys="${RAMP_KEYS:-}"
 if [[ -z "$keys" ]]; then
-  [[ -n "$aps" ]] || die "no alarms_per_source in precheck summary"
-  if [[ "$aps" -ge 20 ]]; then keys=100; else keys=1; fi
+  if [[ -z "$aps" ]]; then keys=100
+  elif [[ "$aps" -ge 20 ]]; then keys=100
+  else keys=1; fi
 fi
 
 to_bytes() {

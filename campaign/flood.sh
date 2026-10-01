@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # flood.sh <rate> <duration> <keys> <sources> <out-file>
+# Assumes the source pool is a /24 and sources <= 254.
 set -euo pipefail
 # shellcheck source=campaign/lib.sh
 source "$(dirname "$0")/lib.sh"
