@@ -5,6 +5,7 @@ SHELL           := /bin/bash -o nounset -o pipefail -o errexit
 .DEFAULT_GOAL   := help
 HELM_CHARTS_DIR ?= ../opennms-helm-charts
 CHART           := charts/opennms-vpa
+EXTRA           ?=
 BUILD_DIR       := build
 
 .PHONY: help
@@ -112,7 +113,7 @@ KUBECONFIG_LAB := $(LAB_STATE)/kubeconfig
 
 .PHONY: deploy
 deploy: deps
-	KUBECONFIG=$(KUBECONFIG_LAB) helm upgrade --install poc $(CHART) --namespace poc --create-namespace --force-conflicts --reset-values --wait --timeout 40m
+	KUBECONFIG=$(KUBECONFIG_LAB) helm upgrade --install poc $(CHART) --namespace poc --create-namespace --force-conflicts --reset-values --wait --timeout 40m $(EXTRA)
 
 .PHONY: undeploy
 undeploy:
